@@ -48,7 +48,7 @@ interface DashboardLayoutClientProps {
 const menuItems = [
   { id: "home", label: "Home", icon: Home, href: "/admin-dashboard", active: true },
   { id: "archive", label: "Archive", icon: Archive, href: "/admin-dashboard/archive", active: false },
-  { id: "event-data", label: "Event Data", icon: CalendarDays, href: "/admin-dashboard/event-data", active: false },
+  { id: "event-data", label: "Event Data", icon: CalendarDays, href: "/admin-dashboard/event-data", active: true },
   { id: "reports", label: "Reports", icon: FileText, href: "/admin-dashboard/reports", active: false },
   { id: "votes", label: "Votes", icon: Vote, href: "/admin-dashboard/votes", active: false },
   { id: "merch", label: "Merch", icon: ShoppingBag, href: "/admin-dashboard/merch", active: false },
