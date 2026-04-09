@@ -233,7 +233,9 @@ export function DayStats({ stats }: DayStatsProps) {
     revenue: { label: "Revenue", color: "#6b2fa5" },
     tickets: { label: "Tickets", color: "#22c55e" },
     signups: { label: "Sign-ups", color: "#3b82f6" },
-    profit: { label: "Profit", color: "#f59e0b" },
+    transactionFees: { label: "Transaction Fees", color: "#f59e0b" },
+    totalEvents: { label: "Total Events", color: "#f97316" },
+    paidEvents: { label: "Paid Events", color: "#06b6d4" },
   }
 
   const dataKey = viewMode
