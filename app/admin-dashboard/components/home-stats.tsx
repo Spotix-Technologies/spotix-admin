@@ -16,28 +16,48 @@ export interface StatsData {
     ticketsSold: number
     totalRevenue: number
     usersSignedUp: number
+    totalTransactionFees: number
+    totalEvents: number
+    paidEvents: number
+    freeEvents: number
   }
   previousYearly: {
     ticketsSold: number
     totalRevenue: number
     usersSignedUp: number
+    totalTransactionFees: number
+    totalEvents: number
+    paidEvents: number
+    freeEvents: number
   }
   monthly: {
     current: {
       ticketsSold: number
       totalRevenue: number
       usersSignedUp: number
+      totalTransactionFees: number
+      totalEvents: number
+      paidEvents: number
+      freeEvents: number
     }
     previous: {
       ticketsSold: number
       totalRevenue: number
       usersSignedUp: number
+      totalTransactionFees: number
+      totalEvents: number
+      paidEvents: number
+      freeEvents: number
     }
     all: Array<{
       month: string
       ticketsSold?: number
       totalRevenue?: number
       usersSignedUp?: number
+      totalTransactionFees?: number
+      totalEvents?: number
+      paidEvents?: number
+      freeEvents?: number
     }>
   }
   daily: {
@@ -45,18 +65,30 @@ export interface StatsData {
       ticketsSold: number
       totalRevenue: number
       usersSignedUp: number
+      totalTransactionFees: number
+      totalEvents: number
+      paidEvents: number
+      freeEvents: number
     }
     previousDays: Array<{
       day: string
       ticketsSold?: number
       totalRevenue?: number
       usersSignedUp?: number
+      totalTransactionFees?: number
+      totalEvents?: number
+      paidEvents?: number
+      freeEvents?: number
     }>
     all: Array<{
       day: string
       ticketsSold?: number
       totalRevenue?: number
       usersSignedUp?: number
+      totalTransactionFees?: number
+      totalEvents?: number
+      paidEvents?: number
+      freeEvents?: number
     }>
   }
 }

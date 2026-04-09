@@ -13,20 +13,8 @@ interface DayStatsProps {
   stats: StatsData
 }
 
-type ViewMode = "revenue" | "tickets" | "signups" | "profit"
+type ViewMode = "revenue" | "tickets" | "signups" | "transactionFees" | "totalEvents" | "paidEvents"
 type CompareMode = "1" | "3" | "7"
-
-const PLATFORM_FEE = 150
-const CHARGE_PERCENTAGE = 0.05
-const CHARGE_FIXED = 100
-
-function calculateFinancials(totalRevenue: number, ticketsSold: number) {
-  const platformFee = ticketsSold * PLATFORM_FEE
-  const chargeAmount = totalRevenue * CHARGE_PERCENTAGE + ticketsSold * CHARGE_FIXED
-  const profit = platformFee + chargeAmount
-
-  return { totalRevenue, platformFee, chargeAmount, profit }
-}
 
 function formatCurrency(amount: number): string {
   return new Intl.NumberFormat("en-NG", {
@@ -126,8 +114,7 @@ export function DayStats({ stats }: DayStatsProps) {
   const [viewMode, setViewMode] = useState<ViewMode>("revenue")
   const [compareMode, setCompareMode] = useState<CompareMode>("1")
 
-  const { ticketsSold, totalRevenue, usersSignedUp } = stats.daily.today
-  const financials = calculateFinancials(totalRevenue, ticketsSold)
+  const { ticketsSold, totalRevenue, usersSignedUp, totalTransactionFees, totalEvents, paidEvents, freeEvents } = stats.daily.today
 
   // Calculate previous days dates
   const previousDaysDates = useMemo(() => {
@@ -169,8 +156,11 @@ export function DayStats({ stats }: DayStatsProps) {
     ticketsSold: 0,
     totalRevenue: 0,
     usersSignedUp: 0,
+    totalTransactionFees: 0,
+    totalEvents: 0,
+    paidEvents: 0,
+    freeEvents: 0,
   }
-  const yesterdayFinancials = calculateFinancials(yesterdayData.totalRevenue || 0, yesterdayData.ticketsSold || 0)
 
   // Parse current day for display
   const parsedDay = parseDayString(stats.currentDay)
@@ -187,11 +177,14 @@ export function DayStats({ stats }: DayStatsProps) {
         ticketsSold: 0,
         totalRevenue: 0,
         usersSignedUp: 0,
+        totalTransactionFees: 0,
+        totalEvents: 0,
+        paidEvents: 0,
+        freeEvents: 0,
       }
 
       const dayTickets = dayData.ticketsSold || 0
       const dayRevenue = dayData.totalRevenue || 0
-      const dayFinancials = calculateFinancials(dayRevenue, dayTickets)
 
       return {
         day: formatDayLabel(dateStr, daysToShow - index - 1),
@@ -199,7 +192,10 @@ export function DayStats({ stats }: DayStatsProps) {
         revenue: dayRevenue,
         tickets: dayTickets,
         signups: dayData.usersSignedUp || 0,
-        profit: dayFinancials.profit,
+        transactionFees: dayData.totalTransactionFees || 0,
+        totalEvents: dayData.totalEvents || 0,
+        paidEvents: dayData.paidEvents || 0,
+        freeEvents: dayData.freeEvents || 0,
       }
     })
 
@@ -210,7 +206,10 @@ export function DayStats({ stats }: DayStatsProps) {
       revenue: totalRevenue,
       tickets: ticketsSold,
       signups: usersSignedUp,
-      profit: financials.profit,
+      transactionFees: totalTransactionFees,
+      totalEvents: totalEvents,
+      paidEvents: paidEvents,
+      freeEvents: freeEvents,
     })
 
     return chartDays
@@ -222,15 +221,13 @@ export function DayStats({ stats }: DayStatsProps) {
     ticketsSold,
     totalRevenue,
     usersSignedUp,
-    financials.profit,
+    totalTransactionFees,
+    totalEvents,
+    paidEvents,
+    freeEvents,
   ])
 
-  useEffect(() => {
-    console.log("Current day:", stats.currentDay)
-    console.log("Previous days dates:", previousDaysDates)
-    console.log("Daily data map:", dailyDataMap)
-    console.log("Chart data:", chartData)
-  }, [stats.currentDay, previousDaysDates, dailyDataMap, chartData])
+
 
   const chartConfig = {
     revenue: { label: "Revenue", color: "#6b2fa5" },
@@ -252,13 +249,17 @@ export function DayStats({ stats }: DayStatsProps) {
   const highlightValue = () => {
     switch (viewMode) {
       case "revenue":
-        return { label: "Today's Revenue", value: formatCurrency(financials.totalRevenue), color: "purple" }
+        return { label: "Today's Revenue", value: formatCurrency(totalRevenue), color: "purple" }
       case "tickets":
         return { label: "Tickets Sold Today", value: formatNumber(ticketsSold), color: "green" }
       case "signups":
         return { label: "Sign-ups Today", value: formatNumber(usersSignedUp), color: "blue" }
-      case "profit":
-        return { label: "Today's Profit", value: formatCurrency(financials.profit), color: "amber" }
+      case "transactionFees":
+        return { label: "Transaction Fees Today", value: formatCurrency(totalTransactionFees), color: "amber" }
+      case "totalEvents":
+        return { label: "Total Events Today", value: formatNumber(totalEvents), color: "orange" }
+      case "paidEvents":
+        return { label: "Paid Events Today", value: formatNumber(paidEvents), color: "cyan" }
     }
   }
 
@@ -303,11 +304,25 @@ export function DayStats({ stats }: DayStatsProps) {
               Sign-ups
             </ToggleGroupItem>
             <ToggleGroupItem
-              value="profit"
-              aria-label="View profit"
+              value="transactionFees"
+              aria-label="View transaction fees"
               className="text-[10px] md:text-xs h-7 md:h-8 px-2 md:px-3"
             >
-              Profit
+              Fees
+            </ToggleGroupItem>
+            <ToggleGroupItem
+              value="totalEvents"
+              aria-label="View total events"
+              className="text-[10px] md:text-xs h-7 md:h-8 px-2 md:px-3"
+            >
+              Events
+            </ToggleGroupItem>
+            <ToggleGroupItem
+              value="paidEvents"
+              aria-label="View paid events"
+              className="text-[10px] md:text-xs h-7 md:h-8 px-2 md:px-3"
+            >
+              Paid Events
             </ToggleGroupItem>
           </ToggleGroup>
         </div>
@@ -318,7 +333,7 @@ export function DayStats({ stats }: DayStatsProps) {
         >
           <div className="absolute top-2 right-2 md:top-3 md:right-3">
             {viewMode === "revenue" && (
-              <PercentageIndicator current={financials.totalRevenue} previous={yesterdayFinancials.totalRevenue} />
+              <PercentageIndicator current={totalRevenue} previous={yesterdayData.totalRevenue || 0} />
             )}
             {viewMode === "tickets" && (
               <PercentageIndicator current={ticketsSold} previous={yesterdayData.ticketsSold || 0} />
@@ -326,28 +341,34 @@ export function DayStats({ stats }: DayStatsProps) {
             {viewMode === "signups" && (
               <PercentageIndicator current={usersSignedUp} previous={yesterdayData.usersSignedUp || 0} />
             )}
-            {viewMode === "profit" && (
-              <PercentageIndicator current={financials.profit} previous={yesterdayFinancials.profit} />
+            {viewMode === "transactionFees" && (
+              <PercentageIndicator current={totalTransactionFees} previous={yesterdayData.totalTransactionFees || 0} />
+            )}
+            {viewMode === "totalEvents" && (
+              <PercentageIndicator current={totalEvents} previous={yesterdayData.totalEvents || 0} />
+            )}
+            {viewMode === "paidEvents" && (
+              <PercentageIndicator current={paidEvents} previous={yesterdayData.paidEvents || 0} />
             )}
           </div>
           <p className="text-xs md:text-sm font-medium mb-1 md:mb-2">{highlight.label}</p>
           <p className="text-2xl md:text-4xl font-bold truncate">{highlight.value}</p>
         </div>
 
-        <div className="grid grid-cols-2 gap-2 md:gap-4 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-2 md:gap-4 lg:grid-cols-6">
           <div className="p-2 md:p-4 rounded-lg bg-purple-50 border border-purple-100">
             <div className="flex items-center justify-between mb-1 md:mb-2 flex-wrap gap-1">
               <div className="flex items-center gap-1 md:gap-2">
                 <Banknote className="w-3 h-3 md:w-4 md:h-4 text-purple-600" />
                 <span className="text-[10px] md:text-xs font-medium text-purple-600">Revenue</span>
               </div>
-              <PercentageIndicator current={financials.totalRevenue} previous={yesterdayFinancials.totalRevenue} />
+              <PercentageIndicator current={totalRevenue} previous={yesterdayData.totalRevenue || 0} />
             </div>
             <p className="text-sm md:text-lg font-bold text-purple-900 truncate">
-              {formatCurrency(financials.totalRevenue)}
+              {formatCurrency(totalRevenue)}
             </p>
             <p className="text-[10px] md:text-xs text-purple-600/70 mt-0.5 md:mt-1 truncate">
-              vs {formatCurrency(yesterdayFinancials.totalRevenue)}
+              vs {formatCurrency(yesterdayData.totalRevenue || 0)}
             </p>
           </div>
           <div className="p-2 md:p-4 rounded-lg bg-green-50 border border-green-100">
@@ -379,29 +400,40 @@ export function DayStats({ stats }: DayStatsProps) {
           <div className="p-2 md:p-4 rounded-lg bg-amber-50 border border-amber-100">
             <div className="flex items-center justify-between mb-1 md:mb-2 flex-wrap gap-1">
               <div className="flex items-center gap-1 md:gap-2">
-                <TrendingUp className="w-3 h-3 md:w-4 md:h-4 text-amber-600" />
-                <span className="text-[10px] md:text-xs font-medium text-amber-600">Profit</span>
+                <Banknote className="w-3 h-3 md:w-4 md:h-4 text-amber-600" />
+                <span className="text-[10px] md:text-xs font-medium text-amber-600">Fees</span>
               </div>
-              <PercentageIndicator current={financials.profit} previous={yesterdayFinancials.profit} />
+              <PercentageIndicator current={totalTransactionFees} previous={yesterdayData.totalTransactionFees || 0} />
             </div>
-            <p className="text-sm md:text-lg font-bold text-amber-900 truncate">{formatCurrency(financials.profit)}</p>
+            <p className="text-sm md:text-lg font-bold text-amber-900 truncate">{formatCurrency(totalTransactionFees)}</p>
             <p className="text-[10px] md:text-xs text-amber-600/70 mt-0.5 md:mt-1 truncate">
-              vs {formatCurrency(yesterdayFinancials.profit)}
+              vs {formatCurrency(yesterdayData.totalTransactionFees || 0)}
             </p>
           </div>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 md:gap-4 mt-3 md:mt-4">
-          <div className="p-2 md:p-3 rounded-lg bg-gray-50 border">
-            <p className="text-[10px] md:text-xs text-gray-500 mb-0.5 md:mb-1">
-              Platform Fee (NGN 150 x {formatNumber(ticketsSold)})
+          <div className="p-2 md:p-4 rounded-lg bg-orange-50 border border-orange-100">
+            <div className="flex items-center justify-between mb-1 md:mb-2 flex-wrap gap-1">
+              <div className="flex items-center gap-1 md:gap-2">
+                <Ticket className="w-3 h-3 md:w-4 md:h-4 text-orange-600" />
+                <span className="text-[10px] md:text-xs font-medium text-orange-600">Total Events</span>
+              </div>
+              <PercentageIndicator current={totalEvents} previous={yesterdayData.totalEvents || 0} />
+            </div>
+            <p className="text-sm md:text-lg font-bold text-orange-900">{formatNumber(totalEvents)}</p>
+            <p className="text-[10px] md:text-xs text-orange-600/70 mt-0.5 md:mt-1">
+              vs {formatNumber(yesterdayData.totalEvents || 0)}
             </p>
-            <p className="text-sm md:text-base font-semibold text-gray-900">{formatCurrency(financials.platformFee)}</p>
           </div>
-          <div className="p-2 md:p-3 rounded-lg bg-gray-50 border">
-            <p className="text-[10px] md:text-xs text-gray-500 mb-0.5 md:mb-1">Charge (5% + NGN 100/ticket)</p>
-            <p className="text-sm md:text-base font-semibold text-gray-900">
-              {formatCurrency(financials.chargeAmount)}
+          <div className="p-2 md:p-4 rounded-lg bg-cyan-50 border border-cyan-100">
+            <div className="flex items-center justify-between mb-1 md:mb-2 flex-wrap gap-1">
+              <div className="flex items-center gap-1 md:gap-2">
+                <Ticket className="w-3 h-3 md:w-4 md:h-4 text-cyan-600" />
+                <span className="text-[10px] md:text-xs font-medium text-cyan-600">Paid Events</span>
+              </div>
+              <PercentageIndicator current={paidEvents} previous={yesterdayData.paidEvents || 0} />
+            </div>
+            <p className="text-sm md:text-lg font-bold text-cyan-900">{formatNumber(paidEvents)}</p>
+            <p className="text-[10px] md:text-xs text-cyan-600/70 mt-0.5 md:mt-1">
+              vs {formatNumber(yesterdayData.paidEvents || 0)}
             </p>
           </div>
         </div>

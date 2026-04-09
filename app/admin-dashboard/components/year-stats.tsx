@@ -13,24 +13,7 @@ interface YearStatsProps {
   stats: StatsData
 }
 
-type ViewMode = "revenue" | "tickets" | "signups" | "profit"
-
-const PLATFORM_FEE = 150
-const CHARGE_PERCENTAGE = 0.05
-const CHARGE_FIXED = 100
-
-function calculateFinancials(totalRevenue: number, ticketsSold: number) {
-  const platformFee = ticketsSold * PLATFORM_FEE
-  const chargeAmount = totalRevenue * CHARGE_PERCENTAGE + ticketsSold * CHARGE_FIXED
-  const profit = platformFee + chargeAmount
-
-  return {
-    totalRevenue,
-    platformFee,
-    chargeAmount,
-    profit,
-  }
-}
+type ViewMode = "revenue" | "tickets" | "signups" | "transactionFees" | "totalEvents" | "paidEvents"
 
 function formatCurrency(amount: number): string {
   return new Intl.NumberFormat("en-NG", {
@@ -83,33 +66,30 @@ function PercentageIndicator({ current, previous }: { current: number; previous:
 export function YearStats({ stats }: YearStatsProps) {
   const [viewMode, setViewMode] = useState<ViewMode>("revenue")
 
-  const { totalRevenue, ticketsSold, usersSignedUp } = stats.yearly
-  const financials = calculateFinancials(totalRevenue, ticketsSold)
+  const { totalRevenue, ticketsSold, usersSignedUp, totalTransactionFees, totalEvents, paidEvents, freeEvents } = stats.yearly
 
   const prevYearly = stats.previousYearly
-  const prevFinancials = calculateFinancials(prevYearly.totalRevenue, prevYearly.ticketsSold)
 
   const chartData = stats.monthly.all.map((month) => {
     const monthNum = Number.parseInt(month.month.split("-")[1], 10)
     const monthTickets = month.ticketsSold || 0
     const monthRevenue = month.totalRevenue || 0
-    const monthFinancials = calculateFinancials(monthRevenue, monthTickets)
 
     return {
       month: getMonthAbbreviation(monthNum),
       revenue: monthRevenue,
       tickets: monthTickets,
       signups: month.usersSignedUp || 0,
-      profit: monthFinancials.profit,
-      platformFee: monthFinancials.platformFee,
-      charge: monthFinancials.chargeAmount,
+      transactionFees: month.totalTransactionFees || 0,
+      totalEvents: month.totalEvents || 0,
+      paidEvents: month.paidEvents || 0,
     }
   })
 
   const allMonths = Array.from({ length: 12 }, (_, i) => {
     const monthAbbr = getMonthAbbreviation(i + 1)
     const existing = chartData.find((d) => d.month === monthAbbr)
-    return existing || { month: monthAbbr, revenue: 0, tickets: 0, signups: 0, profit: 0, platformFee: 0, charge: 0 }
+    return existing || { month: monthAbbr, revenue: 0, tickets: 0, signups: 0, transactionFees: 0, totalEvents: 0, paidEvents: 0 }
   })
 
   const chartConfig = {
@@ -158,30 +138,44 @@ export function YearStats({ stats }: YearStatsProps) {
               Sign-ups
             </ToggleGroupItem>
             <ToggleGroupItem
-              value="profit"
-              aria-label="View profit"
+              value="transactionFees"
+              aria-label="View transaction fees"
               className="text-[10px] md:text-xs h-7 md:h-8 px-2 md:px-3"
             >
-              Profit
+              Fees
+            </ToggleGroupItem>
+            <ToggleGroupItem
+              value="totalEvents"
+              aria-label="View total events"
+              className="text-[10px] md:text-xs h-7 md:h-8 px-2 md:px-3"
+            >
+              Events
+            </ToggleGroupItem>
+            <ToggleGroupItem
+              value="paidEvents"
+              aria-label="View paid events"
+              className="text-[10px] md:text-xs h-7 md:h-8 px-2 md:px-3"
+            >
+              Paid Events
             </ToggleGroupItem>
           </ToggleGroup>
         </div>
       </CardHeader>
       <CardContent className="p-4 md:p-6 pt-0 md:pt-0">
-        <div className="grid grid-cols-2 gap-2 md:gap-4 mb-4 md:mb-6 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-2 md:gap-4 mb-4 md:mb-6 lg:grid-cols-6">
           <div className="p-2 md:p-4 rounded-lg bg-purple-50 border border-purple-100">
             <div className="flex items-center justify-between mb-1 md:mb-2 flex-wrap gap-1">
               <div className="flex items-center gap-1 md:gap-2">
                 <Banknote className="w-3 h-3 md:w-4 md:h-4 text-purple-600" />
                 <span className="text-[10px] md:text-xs font-medium text-purple-600">Total Revenue</span>
               </div>
-              <PercentageIndicator current={financials.totalRevenue} previous={prevFinancials.totalRevenue} />
+              <PercentageIndicator current={totalRevenue} previous={prevYearly.totalRevenue} />
             </div>
             <p className="text-sm md:text-xl font-bold text-purple-900 truncate">
-              {formatCurrency(financials.totalRevenue)}
+              {formatCurrency(totalRevenue)}
             </p>
             <p className="text-[10px] md:text-xs text-purple-600/70 mt-0.5 md:mt-1 truncate">
-              vs {formatCurrency(prevFinancials.totalRevenue)}
+              vs {formatCurrency(prevYearly.totalRevenue)}
             </p>
           </div>
           <div className="p-2 md:p-4 rounded-lg bg-green-50 border border-green-100">
@@ -213,29 +207,40 @@ export function YearStats({ stats }: YearStatsProps) {
           <div className="p-2 md:p-4 rounded-lg bg-amber-50 border border-amber-100">
             <div className="flex items-center justify-between mb-1 md:mb-2 flex-wrap gap-1">
               <div className="flex items-center gap-1 md:gap-2">
-                <TrendingUp className="w-3 h-3 md:w-4 md:h-4 text-amber-600" />
-                <span className="text-[10px] md:text-xs font-medium text-amber-600">Total Profit</span>
+                <Banknote className="w-3 h-3 md:w-4 md:h-4 text-amber-600" />
+                <span className="text-[10px] md:text-xs font-medium text-amber-600">Total Fees</span>
               </div>
-              <PercentageIndicator current={financials.profit} previous={prevFinancials.profit} />
+              <PercentageIndicator current={totalTransactionFees} previous={prevYearly.totalTransactionFees} />
             </div>
-            <p className="text-sm md:text-xl font-bold text-amber-900 truncate">{formatCurrency(financials.profit)}</p>
+            <p className="text-sm md:text-xl font-bold text-amber-900 truncate">{formatCurrency(totalTransactionFees)}</p>
             <p className="text-[10px] md:text-xs text-amber-600/70 mt-0.5 md:mt-1 truncate">
-              vs {formatCurrency(prevFinancials.profit)}
+              vs {formatCurrency(prevYearly.totalTransactionFees)}
             </p>
           </div>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 md:gap-4 mb-4 md:mb-6">
-          <div className="p-2 md:p-3 rounded-lg bg-gray-50 border">
-            <p className="text-[10px] md:text-xs text-gray-500 mb-0.5 md:mb-1">
-              Platform Fee (NGN 150 x {formatNumber(ticketsSold)})
+          <div className="p-2 md:p-4 rounded-lg bg-orange-50 border border-orange-100">
+            <div className="flex items-center justify-between mb-1 md:mb-2 flex-wrap gap-1">
+              <div className="flex items-center gap-1 md:gap-2">
+                <Ticket className="w-3 h-3 md:w-4 md:h-4 text-orange-600" />
+                <span className="text-[10px] md:text-xs font-medium text-orange-600">Total Events</span>
+              </div>
+              <PercentageIndicator current={totalEvents} previous={prevYearly.totalEvents} />
+            </div>
+            <p className="text-sm md:text-xl font-bold text-orange-900">{formatNumber(totalEvents)}</p>
+            <p className="text-[10px] md:text-xs text-orange-600/70 mt-0.5 md:mt-1">
+              vs {formatNumber(prevYearly.totalEvents)}
             </p>
-            <p className="text-sm md:text-base font-semibold text-gray-900">{formatCurrency(financials.platformFee)}</p>
           </div>
-          <div className="p-2 md:p-3 rounded-lg bg-gray-50 border">
-            <p className="text-[10px] md:text-xs text-gray-500 mb-0.5 md:mb-1">Charge (5% + NGN 100/ticket)</p>
-            <p className="text-sm md:text-base font-semibold text-gray-900">
-              {formatCurrency(financials.chargeAmount)}
+          <div className="p-2 md:p-4 rounded-lg bg-cyan-50 border border-cyan-100">
+            <div className="flex items-center justify-between mb-1 md:mb-2 flex-wrap gap-1">
+              <div className="flex items-center gap-1 md:gap-2">
+                <Ticket className="w-3 h-3 md:w-4 md:h-4 text-cyan-600" />
+                <span className="text-[10px] md:text-xs font-medium text-cyan-600">Paid Events</span>
+              </div>
+              <PercentageIndicator current={paidEvents} previous={prevYearly.paidEvents} />
+            </div>
+            <p className="text-sm md:text-xl font-bold text-cyan-900">{formatNumber(paidEvents)}</p>
+            <p className="text-[10px] md:text-xs text-cyan-600/70 mt-0.5 md:mt-1">
+              vs {formatNumber(prevYearly.paidEvents)}
             </p>
           </div>
         </div>
