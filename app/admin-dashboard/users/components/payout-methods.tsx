@@ -26,13 +26,12 @@ export function PayoutMethodsComponent({
     type: "bank" as const,
     displayName: "",
     lastFour: "",
-    paypalEmail: "",
   })
   const [adding, setAdding] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
 
   const handleAddMethod = async () => {
-    if (!formData.displayName || (!formData.lastFour && !formData.paypalEmail)) {
+    if (!formData.displayName || !formData.lastFour) {
       return
     }
 
@@ -48,7 +47,7 @@ export function PayoutMethodsComponent({
       )
 
       if (response.ok) {
-        setFormData({ type: "bank", displayName: "", lastFour: "", paypalEmail: "" })
+        setFormData({ type: "bank", displayName: "", lastFour: "" })
         setAddDialogOpen(false)
         onRefresh()
       }
@@ -193,21 +192,6 @@ export function PayoutMethodsComponent({
 
               <div className="mt-4 space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-700">Type</label>
-                  <select
-                    value={formData.type}
-                    onChange={(e) =>
-                      setFormData({ ...formData, type: e.target.value as any })
-                    }
-                    className="w-full mt-1 px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                  >
-                    <option value="bank">Bank Account</option>
-                    <option value="paypal">PayPal</option>
-                    <option value="stripe">Stripe</option>
-                  </select>
-                </div>
-
-                <div>
                   <label className="block text-sm font-medium text-slate-700">
                     Display Name
                   </label>
@@ -222,40 +206,21 @@ export function PayoutMethodsComponent({
                   />
                 </div>
 
-                {formData.type === "bank" && (
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700">
-                      Last 4 Digits
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.lastFour}
-                      onChange={(e) =>
-                        setFormData({ ...formData, lastFour: e.target.value })
-                      }
-                      placeholder="e.g., 5678"
-                      maxLength={4}
-                      className="w-full mt-1 px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                    />
-                  </div>
-                )}
-
-                {formData.type === "paypal" && (
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700">
-                      PayPal Email
-                    </label>
-                    <input
-                      type="email"
-                      value={formData.paypalEmail}
-                      onChange={(e) =>
-                        setFormData({ ...formData, paypalEmail: e.target.value })
-                      }
-                      placeholder="your@email.com"
-                      className="w-full mt-1 px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                    />
-                  </div>
-                )}
+                <div>
+                  <label className="block text-sm font-medium text-slate-700">
+                    Last 4 Digits
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.lastFour}
+                    onChange={(e) =>
+                      setFormData({ ...formData, lastFour: e.target.value })
+                    }
+                    placeholder="e.g., 5678"
+                    maxLength={4}
+                    className="w-full mt-1 px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
               </div>
 
               <div className="flex gap-3 mt-6">
@@ -267,7 +232,7 @@ export function PayoutMethodsComponent({
                 </button>
                 <button
                   onClick={handleAddMethod}
-                  disabled={adding || !formData.displayName}
+                  disabled={adding || !formData.displayName || !formData.lastFour}
                   className="flex-1 px-4 py-2 bg-emerald-600 text-white rounded-lg font-medium hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   {adding ? "Adding..." : "Add Method"}
