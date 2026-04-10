@@ -5,15 +5,6 @@ import { verifyAdminAccess } from "@/lib/verify-admin"
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
-interface UserSearchResult {
-  email: string
-  displayName: string
-  userId: string
-  createdAt: string
-  lastLogin?: string
-  ticketsCount: number
-}
-
 export async function GET(request: NextRequest) {
   try {
     // Verify admin access
@@ -23,45 +14,38 @@ export async function GET(request: NextRequest) {
     }
 
     const { searchParams } = new URL(request.url)
-    const query = searchParams.get("q")?.trim().toLowerCase()
+    const email = searchParams.get("email")?.trim()
 
-    if (!query || query.length < 2) {
+    if (!email) {
       return NextResponse.json(
-        { error: "Query must be at least 2 characters", results: [] },
+        { error: "Email is required", found: false },
         { status: 400 }
       )
     }
 
-    // Search users by email
+    // Search user by exact email
     const usersRef = adminDb.collection("users")
-    let results: UserSearchResult[] = []
+    const snapshot = await usersRef.where("email", "==", email).limit(1).get()
 
-    // Firestore doesn't support LIKE queries, so we fetch users and filter
-    // For production, consider using Algolia or Meilisearch
-    const snapshot = await usersRef.limit(100).get()
+    if (snapshot.empty) {
+      return NextResponse.json({ found: false })
+    }
 
-    snapshot.forEach((doc) => {
-      const data = doc.data()
-      const email = data.email?.toLowerCase() || ""
-      const displayName = data.username || data.email || "Unknown"
+    const userDoc = snapshot.docs[0]
+    const userData = userDoc.data()
 
-      if (email.includes(query) || displayName.toLowerCase().includes(query)) {
-        results.push({
-          email: data.email,
-          displayName,
-          userId: doc.id,
-          createdAt: data.createdAt || "",
-          lastLogin: data.lastLogin,
-          ticketsCount: data.ticketsCount || 0,
-        })
-      }
+    return NextResponse.json({
+      found: true,
+      user: {
+        email: userData.email,
+        username: userData.username,
+        fullName: userData.fullName,
+      },
     })
-
-    return NextResponse.json({ results })
   } catch (error) {
     console.error("[v0] Users search error:", error)
     return NextResponse.json(
-      { error: "Failed to search users", results: [] },
+      { error: "Failed to search users", found: false },
       { status: 500 }
     )
   }

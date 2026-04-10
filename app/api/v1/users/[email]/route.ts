@@ -5,21 +5,6 @@ import { verifyAdminAccess } from "@/lib/verify-admin"
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
-export interface UserDetails {
-  email: string
-  displayName: string
-  userId: string
-  createdAt: string
-  lastLogin?: string
-  totalTickets: number
-  totalSpent: number
-  blockedStatus?: {
-    isBlocked: boolean
-    blockedAt?: string
-    reason?: string
-  }
-}
-
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ email: string }> }
@@ -45,35 +30,22 @@ export async function GET(
     const userDoc = userQuery.docs[0]
     const userData = userDoc.data()
 
-    // Get user's tickets count and total spent
-    const ticketsRef = adminDb.collection("userTickets")
-    const ticketsSnapshot = await ticketsRef.where("userEmail", "==", decodedEmail).get()
-
-    let totalSpent = 0
-    ticketsSnapshot.forEach((doc) => {
-      const ticket = doc.data()
-      totalSpent += ticket.price || 0
-    })
-
-    // Check if user is blocked
-    const blockRef = adminDb.collection("blockedUsers").doc(decodedEmail)
-    const blockDoc = await blockRef.get()
-
-    const details: UserDetails = {
-      email: userData.email,
-      displayName: userData.username || userData.email,
-      userId: userDoc.id,
+    const details = {
       createdAt: userData.createdAt || "",
-      lastLogin: userData.lastLogin,
-      totalTickets: ticketsSnapshot.size,
-      totalSpent,
-      blockedStatus: blockDoc.exists
-        ? {
-            isBlocked: true,
-            blockedAt: blockDoc.data()?.blockedAt,
-            reason: blockDoc.data()?.reason,
-          }
-        : { isBlocked: false },
+      email: userData.email || "",
+      fullName: userData.fullName || "",
+      isBooker: userData.isBooker || false,
+      lastLogin: userData.lastLogin || "",
+      phoneNumber: userData.phoneNumber || "",
+      profilePicture: userData.profilePicture || "",
+      referralCodeUsed: userData.referralCodeUsed || "",
+      referredBy: userData.referredBy || "",
+      totalEvents: userData.totalEvents || 0,
+      totalPaidOut: userData.totalPaidOut || 0,
+      totalRevenue: userData.totalRevenue || 0,
+      totalTicketsSold: userData.totalTicketsSold || 0,
+      updatedAt: userData.updatedAt || "",
+      username: userData.username || "",
     }
 
     return NextResponse.json(details)

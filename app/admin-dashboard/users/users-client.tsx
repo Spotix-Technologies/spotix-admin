@@ -1,39 +1,27 @@
 "use client"
 
-import { useState, useCallback, useMemo } from "react"
+import { useState, useCallback } from "react"
 import { UserDetailsComponent } from "./components/user-details"
 import { PayoutMethodsComponent } from "./components/payout-methods"
 import { UserTicketsComponent } from "./components/user-tickets"
 import { UserSessionsComponent } from "./components/user-sessions"
-import type { UserDetails } from "@/app/api/v1/users/[email]/route"
-import type { PayoutMethod } from "@/app/api/v1/users/[email]/payout-methods/route"
-import type { UserTicket } from "@/app/api/v1/users/[email]/tickets/route"
-import type { UserSession } from "@/app/api/v1/users/[email]/sessions/route"
 import { Search } from "lucide-react"
-import { getCache, setCache, CACHE_KEYS } from "@/lib/cache"
-
-interface SearchResult {
-  email: string
-  displayName: string
-  userId: string
-  ticketsCount: number
-}
 
 export function UsersClient() {
-  const [searchQuery, setSearchQuery] = useState("")
+  const [searchEmail, setSearchEmail] = useState("")
   const [selectedEmail, setSelectedEmail] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<"details" | "payouts" | "tickets" | "sessions">("details")
 
   // Search state
-  const [searchResults, setSearchResults] = useState<SearchResult[]>([])
   const [searching, setSearching] = useState(false)
+  const [searchFound, setSearchFound] = useState(false)
   const [searchError, setSearchError] = useState<string | null>(null)
 
   // User data state
-  const [userDetails, setUserDetails] = useState<UserDetails | null>(null)
-  const [payoutMethods, setPayoutMethods] = useState<PayoutMethod[]>([])
-  const [tickets, setTickets] = useState<UserTicket[]>([])
-  const [sessions, setSessions] = useState<UserSession[]>([])
+  const [userDetails, setUserDetails] = useState<any | null>(null)
+  const [payoutMethods, setPayoutMethods] = useState<any[]>([])
+  const [tickets, setTickets] = useState<any[]>([])
+  const [sessions, setSessions] = useState<any[]>([])
 
   // Loading state
   const [loadingDetails, setLoadingDetails] = useState(false)
@@ -47,46 +35,14 @@ export function UsersClient() {
   const [ticketsError, setTicketsError] = useState<string | null>(null)
   const [sessionsError, setSessionsError] = useState<string | null>(null)
 
-  // Search users
-  const handleSearch = useCallback(async (query: string) => {
-    setSearchQuery(query)
-    setSearchError(null)
-
-    if (query.length < 2) {
-      setSearchResults([])
-      return
-    }
-
-    setSearching(true)
-    try {
-      const cached = getCache<SearchResult[]>(CACHE_KEYS.USER_SEARCH(query))
-      if (cached) {
-        setSearchResults(cached)
-        return
-      }
-
-      const response = await fetch(`/api/v1/users/search?q=${encodeURIComponent(query)}`)
-      const data = await response.json()
-
-      if (response.ok) {
-        setCache(CACHE_KEYS.USER_SEARCH(query), data.results, 300)
-        setSearchResults(data.results)
-      } else {
-        setSearchError(data.error || "Failed to search users")
-      }
-    } catch (error) {
-      console.error("[v0] Search error:", error)
-      setSearchError("Failed to search users")
-    } finally {
-      setSearching(false)
-    }
-  }, [])
-
   // Load user details
   const loadUserData = useCallback(async (email: string) => {
     setSelectedEmail(email)
     setActiveTab("details")
     setDetailsError(null)
+    setPayoutsError(null)
+    setTicketsError(null)
+    setSessionsError(null)
 
     try {
       // Load user details
@@ -98,6 +54,7 @@ export function UsersClient() {
       } else {
         setDetailsError("Failed to load user details")
       }
+      setLoadingDetails(false)
 
       // Load payout methods
       setLoadingPayouts(true)
@@ -106,10 +63,11 @@ export function UsersClient() {
       )
       if (payoutsResponse.ok) {
         const data = await payoutsResponse.json()
-        setPayoutMethods(data.methods)
+        setPayoutMethods(data.methods || [])
       } else {
         setPayoutsError("Failed to load payout methods")
       }
+      setLoadingPayouts(false)
 
       // Load tickets
       setLoadingTickets(true)
@@ -118,10 +76,11 @@ export function UsersClient() {
       )
       if (ticketsResponse.ok) {
         const data = await ticketsResponse.json()
-        setTickets(data.tickets)
+        setTickets(data.tickets || [])
       } else {
         setTicketsError("Failed to load tickets")
       }
+      setLoadingTickets(false)
 
       // Load sessions
       setLoadingSessions(true)
@@ -130,14 +89,14 @@ export function UsersClient() {
       )
       if (sessionsResponse.ok) {
         const data = await sessionsResponse.json()
-        setSessions(data.sessions)
+        setSessions(data.sessions || [])
       } else {
         setSessionsError("Failed to load sessions")
       }
+      setLoadingSessions(false)
     } catch (error) {
       console.error("[v0] Load user data error:", error)
       setDetailsError("Failed to load user data")
-    } finally {
       setLoadingDetails(false)
       setLoadingPayouts(false)
       setLoadingTickets(false)
@@ -145,51 +104,39 @@ export function UsersClient() {
     }
   }, [])
 
-  // Block/Unblock user
-  const handleBlockUser = useCallback(
-    async (reason: string) => {
-      if (!selectedEmail) return
+  // Search users by email
+  const handleSearch = useCallback(
+    async (e?: React.FormEvent) => {
+      e?.preventDefault()
+      setSearchError(null)
+      setSearchFound(false)
 
+      const email = searchEmail.trim()
+      if (!email) {
+        setSearchError("Please enter an email address")
+        return
+      }
+
+      setSearching(true)
       try {
-        const response = await fetch(
-          `/api/v1/users/${encodeURIComponent(selectedEmail)}/block`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ reason }),
-          }
-        )
+        const response = await fetch(`/api/v1/users/search?email=${encodeURIComponent(email)}`)
+        const data = await response.json()
 
-        if (response.ok) {
-          // Reload user details
-          await loadUserData(selectedEmail)
+        if (data.found) {
+          setSearchFound(true)
+          await loadUserData(email)
+        } else {
+          setSearchError("User not found")
         }
       } catch (error) {
-        console.error("[v0] Block user error:", error)
+        console.error("[v0] Search error:", error)
+        setSearchError("Failed to search users")
+      } finally {
+        setSearching(false)
       }
     },
-    [selectedEmail, loadUserData]
+    [searchEmail, loadUserData]
   )
-
-  const handleUnblockUser = useCallback(async () => {
-    if (!selectedEmail) return
-
-    try {
-      const response = await fetch(
-        `/api/v1/users/${encodeURIComponent(selectedEmail)}/block`,
-        {
-          method: "DELETE",
-        }
-      )
-
-      if (response.ok) {
-        // Reload user details
-        await loadUserData(selectedEmail)
-      }
-    } catch (error) {
-      console.error("[v0] Unblock user error:", error)
-    }
-  }, [selectedEmail, loadUserData])
 
   const handleRefreshPayouts = useCallback(() => {
     if (selectedEmail) {
@@ -206,49 +153,34 @@ export function UsersClient() {
         </div>
 
         <div className="p-6">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-slate-400" />
-            <input
-              type="email"
-              value={searchQuery}
-              onChange={(e) => handleSearch(e.target.value)}
-              placeholder="Search by email or name (minimum 2 characters)..."
-              className="w-full pl-10 pr-4 py-3 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            />
-          </div>
-
-          {searchError && (
-            <p className="mt-3 text-sm text-red-600">{searchError}</p>
-          )}
-
-          {searchResults.length > 0 && (
-            <div className="mt-4 space-y-2">
-              {searchResults.map((result) => (
-                <button
-                  key={result.email}
-                  onClick={() => loadUserData(result.email)}
-                  className={`w-full text-left px-4 py-3 rounded-lg border transition-colors ${
-                    selectedEmail === result.email
-                      ? "border-indigo-500 bg-indigo-50"
-                      : "border-slate-200 hover:bg-slate-50"
-                  }`}
-                >
-                  <p className="font-semibold text-slate-900">{result.displayName}</p>
-                  <p className="text-xs text-slate-600 mt-1">{result.email}</p>
-                  <p className="text-xs text-slate-500 mt-1">
-                    {result.ticketsCount} tickets
-                  </p>
-                </button>
-              ))}
+          <form onSubmit={handleSearch} className="flex gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+              <input
+                type="email"
+                value={searchEmail}
+                onChange={(e) => setSearchEmail(e.target.value)}
+                placeholder="Enter user email address..."
+                className="w-full pl-10 pr-4 py-3 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              />
             </div>
-          )}
+            <button
+              type="submit"
+              disabled={searching}
+              className="px-6 py-3 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {searching ? "Searching..." : "Search"}
+            </button>
+          </form>
 
-          {searching && (
-            <p className="mt-4 text-sm text-slate-600">Searching...</p>
-          )}
+          {searchError && <p className="mt-3 text-sm text-red-600">{searchError}</p>}
 
-          {searchQuery.length >= 2 && searchResults.length === 0 && !searching && !searchError && (
-            <p className="mt-4 text-sm text-slate-600">No users found</p>
+          {searchFound && selectedEmail && (
+            <div className="mt-4 p-4 bg-emerald-50 border border-emerald-200 rounded-lg">
+              <p className="text-sm text-emerald-800">
+                User found: <span className="font-semibold">{selectedEmail}</span>
+              </p>
+            </div>
           )}
         </div>
       </div>
@@ -282,8 +214,6 @@ export function UsersClient() {
               user={userDetails}
               loading={loadingDetails}
               error={detailsError}
-              onBlockUser={handleBlockUser}
-              onUnblockUser={handleUnblockUser}
             />
           )}
 

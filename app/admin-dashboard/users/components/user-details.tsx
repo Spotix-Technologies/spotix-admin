@@ -1,27 +1,14 @@
 "use client"
 
-import { useState } from "react"
-import type { UserDetails } from "@/app/api/v1/users/[email]/route"
-import { AlertCircle, CheckCircle, AlertTriangle } from "lucide-react"
+import { AlertCircle } from "lucide-react"
 
 interface UserDetailsProps {
-  user: UserDetails | null
+  user: any | null
   loading: boolean
   error: string | null
-  onBlockUser: (reason: string) => void
-  onUnblockUser: () => void
 }
 
-export function UserDetailsComponent({
-  user,
-  loading,
-  error,
-  onBlockUser,
-  onUnblockUser,
-}: UserDetailsProps) {
-  const [blockDialogOpen, setBlockDialogOpen] = useState(false)
-  const [blockReason, setBlockReason] = useState("")
-
+export function UserDetailsComponent({ user, loading, error }: UserDetailsProps) {
   if (error) {
     return (
       <div className="rounded-lg border border-red-200 bg-red-50 p-4">
@@ -44,139 +31,105 @@ export function UserDetailsComponent({
     )
   }
 
-  const handleBlockClick = () => {
-    if (blockReason.trim()) {
-      onBlockUser(blockReason)
-      setBlockReason("")
-      setBlockDialogOpen(false)
-    }
-  }
-
   return (
     <div className="rounded-lg border border-slate-200 bg-white overflow-hidden">
       <div className="bg-gradient-to-r from-slate-50 to-slate-100 px-6 py-4 border-b border-slate-200">
-        <h2 className="text-lg font-semibold text-slate-900">{user.displayName}</h2>
+        <h2 className="text-lg font-semibold text-slate-900">{user.fullName || user.username || "Unknown"}</h2>
         <p className="text-sm text-slate-600 mt-1">{user.email}</p>
       </div>
 
       <div className="p-6 space-y-6">
-        {/* Status */}
-        <div>
-          {user.blockedStatus?.isBlocked ? (
-            <div className="flex items-start gap-3 rounded-lg bg-red-50 p-4 border border-red-200">
-              <AlertTriangle className="h-5 w-5 text-red-600 mt-0.5 shrink-0" />
-              <div>
-                <p className="font-semibold text-red-900">User Blocked</p>
-                {user.blockedStatus.reason && (
-                  <p className="text-sm text-red-700 mt-1">
-                    Reason: {user.blockedStatus.reason}
-                  </p>
-                )}
-                {user.blockedStatus.blockedAt && (
-                  <p className="text-xs text-red-600 mt-2">
-                    Blocked on {new Date(user.blockedStatus.blockedAt).toLocaleString()}
-                  </p>
-                )}
-                <button
-                  onClick={onUnblockUser}
-                  className="mt-3 text-sm font-medium text-red-700 hover:text-red-900 underline"
-                >
-                  Unblock User
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div className="flex items-start gap-3 rounded-lg bg-green-50 p-4 border border-green-200">
-              <CheckCircle className="h-5 w-5 text-green-600 mt-0.5 shrink-0" />
-              <div>
-                <p className="font-semibold text-green-900">Active</p>
-                <p className="text-sm text-green-700 mt-1">User account is in good standing</p>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Stats */}
-        <div className="grid grid-cols-3 gap-4">
-          <div className="rounded-lg bg-slate-50 p-4">
-            <p className="text-2xl font-bold text-slate-900">{user.totalTickets}</p>
-            <p className="text-xs text-slate-600 mt-1">Tickets Purchased</p>
-          </div>
-          <div className="rounded-lg bg-slate-50 p-4">
-            <p className="text-2xl font-bold text-emerald-600">₦{user.totalSpent.toLocaleString()}</p>
-            <p className="text-xs text-slate-600 mt-1">Total Spent</p>
-          </div>
-          <div className="rounded-lg bg-slate-50 p-4">
-            <p className="text-sm font-semibold text-slate-900">{new Date(user.createdAt).toLocaleDateString()}</p>
-            <p className="text-xs text-slate-600 mt-1">Member Since</p>
-          </div>
-        </div>
-
-        {/* Additional Info */}
-        <div className="grid grid-cols-2 gap-4 pt-4 border-t border-slate-200">
+        {/* Profile Info */}
+        <div className="grid grid-cols-2 gap-6">
           <div>
-            <p className="text-xs text-slate-600 uppercase tracking-wide">User ID</p>
-            <p className="text-sm font-mono text-slate-900 mt-1">{user.userId}</p>
+            <p className="text-xs text-slate-600 uppercase tracking-wide font-semibold">Username</p>
+            <p className="text-sm text-slate-900 mt-2">{user.username || "-"}</p>
           </div>
-          {user.lastLogin && (
-            <div>
-              <p className="text-xs text-slate-600 uppercase tracking-wide">Last Login</p>
-              <p className="text-sm text-slate-900 mt-1">{new Date(user.lastLogin).toLocaleString()}</p>
-            </div>
-          )}
+          <div>
+            <p className="text-xs text-slate-600 uppercase tracking-wide font-semibold">Phone Number</p>
+            <p className="text-sm text-slate-900 mt-2">{user.phoneNumber || "-"}</p>
+          </div>
+          <div>
+            <p className="text-xs text-slate-600 uppercase tracking-wide font-semibold">Is Booker</p>
+            <p className="text-sm text-slate-900 mt-2">{user.isBooker ? "Yes" : "No"}</p>
+          </div>
+          <div>
+            <p className="text-xs text-slate-600 uppercase tracking-wide font-semibold">Referred By</p>
+            <p className="text-sm text-slate-900 mt-2">{user.referredBy || "-"}</p>
+          </div>
         </div>
 
-        {/* Actions */}
-        {!user.blockedStatus?.isBlocked && (
+        {/* Account Stats */}
+        <div className="pt-4 border-t border-slate-200">
+          <p className="text-xs text-slate-600 uppercase tracking-wide font-semibold mb-4">Account Statistics</p>
+          <div className="grid grid-cols-3 gap-4">
+            <div className="rounded-lg bg-slate-50 p-4">
+              <p className="text-2xl font-bold text-slate-900">{user.totalEvents}</p>
+              <p className="text-xs text-slate-600 mt-1">Total Events</p>
+            </div>
+            <div className="rounded-lg bg-slate-50 p-4">
+              <p className="text-2xl font-bold text-slate-900">{user.totalTicketsSold}</p>
+              <p className="text-xs text-slate-600 mt-1">Tickets Sold</p>
+            </div>
+            <div className="rounded-lg bg-emerald-50 p-4">
+              <p className="text-2xl font-bold text-emerald-600">₦{(user.totalRevenue || 0).toLocaleString()}</p>
+              <p className="text-xs text-slate-600 mt-1">Total Revenue</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Payout Info */}
+        <div className="pt-4 border-t border-slate-200">
+          <p className="text-xs text-slate-600 uppercase tracking-wide font-semibold mb-4">Payout Information</p>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="rounded-lg bg-slate-50 p-4">
+              <p className="text-lg font-bold text-slate-900">₦{(user.totalPaidOut || 0).toLocaleString()}</p>
+              <p className="text-xs text-slate-600 mt-1">Total Paid Out</p>
+            </div>
+            <div>
+              <p className="text-xs text-slate-600 uppercase tracking-wide font-semibold">Referral Code Used</p>
+              <p className="text-sm text-slate-900 mt-2">{user.referralCodeUsed || "-"}</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Timeline */}
+        <div className="pt-4 border-t border-slate-200">
+          <p className="text-xs text-slate-600 uppercase tracking-wide font-semibold mb-4">Timeline</p>
+          <div className="space-y-3">
+            <div className="flex justify-between">
+              <p className="text-sm text-slate-600">Member Since</p>
+              <p className="text-sm font-semibold text-slate-900">
+                {user.createdAt ? new Date(user.createdAt).toLocaleDateString() : "-"}
+              </p>
+            </div>
+            <div className="flex justify-between">
+              <p className="text-sm text-slate-600">Last Login</p>
+              <p className="text-sm font-semibold text-slate-900">
+                {user.lastLogin ? new Date(user.lastLogin).toLocaleString() : "-"}
+              </p>
+            </div>
+            <div className="flex justify-between">
+              <p className="text-sm text-slate-600">Last Updated</p>
+              <p className="text-sm font-semibold text-slate-900">
+                {user.updatedAt ? new Date(user.updatedAt).toLocaleString() : "-"}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Profile Picture */}
+        {user.profilePicture && (
           <div className="pt-4 border-t border-slate-200">
-            <button
-              onClick={() => setBlockDialogOpen(true)}
-              className="w-full px-4 py-2 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 transition-colors text-sm"
-            >
-              Block User
-            </button>
+            <p className="text-xs text-slate-600 uppercase tracking-wide font-semibold mb-3">Profile Picture</p>
+            <img
+              src={user.profilePicture}
+              alt="User profile"
+              className="w-20 h-20 rounded-lg object-cover border border-slate-200"
+            />
           </div>
         )}
       </div>
-
-      {/* Block Dialog */}
-      {blockDialogOpen && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center">
-          <div className="bg-white rounded-lg shadow-lg max-w-md w-full mx-4">
-            <div className="p-6">
-              <h3 className="text-lg font-semibold text-slate-900">Block User</h3>
-              <p className="text-sm text-slate-600 mt-2">
-                Are you sure you want to block {user.email}?
-              </p>
-              <textarea
-                value={blockReason}
-                onChange={(e) => setBlockReason(e.target.value)}
-                placeholder="Reason for blocking (required)"
-                className="w-full mt-4 px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
-                rows={3}
-              />
-              <div className="flex gap-3 mt-6">
-                <button
-                  onClick={() => {
-                    setBlockDialogOpen(false)
-                    setBlockReason("")
-                  }}
-                  className="flex-1 px-4 py-2 border border-slate-300 text-slate-700 rounded-lg font-medium hover:bg-slate-50 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleBlockClick}
-                  disabled={!blockReason.trim()}
-                  className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  Block
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }

@@ -5,18 +5,6 @@ import { verifyAdminAccess } from "@/lib/verify-admin"
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
-export interface UserTicket {
-  ticketId: string
-  eventId: string
-  eventName: string
-  ticketTier: string
-  price: number
-  quantity: number
-  purchasedAt: string
-  status: "active" | "used" | "cancelled"
-  qrCode?: string
-}
-
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ email: string }> }
@@ -31,23 +19,29 @@ export async function GET(
     const { email } = await params
     const decodedEmail = decodeURIComponent(email)
 
-    // Get user's tickets
-    const ticketsRef = adminDb.collection("userTickets")
-    const snapshot = await ticketsRef.where("userEmail", "==", decodedEmail).get()
+    // Get user's tickets from tickets collection, ordered by purchaseDate descending, limit to 5
+    const ticketsRef = adminDb.collection("tickets")
+    const snapshot = await ticketsRef
+      .where("userEmail", "==", decodedEmail)
+      .orderBy("purchaseDate", "desc")
+      .limit(5)
+      .get()
 
-    const tickets: UserTicket[] = []
+    const tickets: any[] = []
     snapshot.forEach((doc) => {
       const data = doc.data()
       tickets.push({
-        ticketId: doc.id,
-        eventId: data.eventId,
-        eventName: data.eventName,
-        ticketTier: data.ticketTier,
-        price: data.price || 0,
-        quantity: data.quantity || 1,
-        purchasedAt: data.purchasedAt || "",
-        status: data.status || "active",
-        qrCode: data.qrCode,
+        eventName: data.eventName || "",
+        purchaseDate: data.purchaseDate || "",
+        purchaseTime: data.purchaseTime || "",
+        referralCode: data.referralCode || "",
+        referralName: data.referralName || "",
+        ticketId: data.ticketId || doc.id,
+        ticketPrice: data.ticketPrice || 0,
+        ticketReference: data.ticketReference || "",
+        ticketType: data.ticketType || "",
+        totalAmount: data.totalAmount || 0,
+        transactionFee: data.transactionFee || 0,
       })
     })
 
