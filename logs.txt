@@ -6,3 +6,15 @@ This is kind of the very first ever release of the admin system. Although it was
 ## Chore ##
 - Enabled the apis to conform to the new pricing modal of Spotix
 - Created the event data section
+
+
+5:28 PM 4/10/2026
+[v2.0.0]
+Don't judge me, I just like to push and worry later. I added more functionalities
+
+## Bug Fixes ##
+- The event data refused to authenticate any user. It does now
+
+## Features ##
+- Viewing User data
+- Viewing event data

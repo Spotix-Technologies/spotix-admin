@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { adminDb } from "@/lib/firebase-admin"
+import { verifyAdminAccess } from "@/lib/verify-admin"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -44,6 +45,12 @@ function getPreviousDays(currentDay: string, count: number): string[] {
 
 export async function GET(request: NextRequest) {
   try {
+    // Verify admin access
+    const adminResult = await verifyAdminAccess(request)
+    if ("error" in adminResult) {
+      return adminResult.error
+    }
+
     const now = new Date()
     const nigerianTime = new Date(now.getTime() + 60 * 60 * 1000)
     const currentYear = nigerianTime.getUTCFullYear().toString()

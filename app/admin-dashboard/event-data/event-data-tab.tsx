@@ -328,6 +328,7 @@ export default function EventDataTab({ eventData, onUpdate, onDeleted }: Props) 
           <div className="divide-y divide-slate-100">
             {event.ticketPrices.map((tier, i) => {
               const rev = (parseInt(tier.price) || 0) * (tier.ticketsSold || 0)
+              const hasAvailableTickets = (tier.availableTickets || 0) > 0
               const total = (tier.ticketsSold || 0) + (tier.availableTickets || 0)
               const pct = total > 0 ? Math.round(((tier.ticketsSold || 0) / total) * 100) : 0
               return (
@@ -339,18 +340,30 @@ export default function EventDataTab({ eventData, onUpdate, onDeleted }: Props) 
                     </div>
                     <div className="text-right shrink-0">
                       <p className="text-sm font-bold text-emerald-600">{parseInt(tier.price) === 0 ? "Free" : money(parseInt(tier.price))}</p>
-                      <p className="text-xs text-slate-400">{tier.ticketsSold} sold · {tier.availableTickets} left</p>
+                      {hasAvailableTickets ? (
+                        <p className="text-xs text-slate-400">{tier.ticketsSold} sold · {tier.availableTickets} left</p>
+                      ) : (
+                        <p className="text-xs text-slate-400">{tier.ticketsSold} sold</p>
+                      )}
                     </div>
                   </div>
-                  <div>
-                    <div className="flex justify-between text-xs text-slate-400 mb-1">
-                      <span>{pct}% sold</span>
+                  {hasAvailableTickets && (
+                    <div>
+                      <div className="flex justify-between text-xs text-slate-400 mb-1">
+                        <span>{pct}% sold</span>
+                        <span className="text-emerald-600 font-medium">{money(rev)}</span>
+                      </div>
+                      <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                        <div className="h-full bg-gradient-to-r from-violet-500 to-indigo-500 rounded-full transition-all" style={{ width: `${pct}%` }} />
+                      </div>
+                    </div>
+                  )}
+                  {!hasAvailableTickets && (
+                    <div className="flex justify-between text-xs">
+                      <span className="text-slate-400">Unlimited capacity</span>
                       <span className="text-emerald-600 font-medium">{money(rev)}</span>
                     </div>
-                    <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                      <div className="h-full bg-gradient-to-r from-violet-500 to-indigo-500 rounded-full transition-all" style={{ width: `${pct}%` }} />
-                    </div>
-                  </div>
+                  )}
                 </div>
               )
             })}

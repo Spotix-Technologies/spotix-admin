@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { adminDb } from "@/lib/firebase-admin"
 import { FieldValue } from "firebase-admin/firestore"
+import { verifyAdminAccess } from "@/lib/verify-admin"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -31,6 +32,12 @@ interface GlobalSettings {
 
 export async function GET(request: NextRequest) {
   try {
+    // Verify admin access
+    const adminResult = await verifyAdminAccess(request)
+    if ("error" in adminResult) {
+      return adminResult.error
+    }
+
     // Get global settings
     const globalRef = adminDb.collection("admin").doc("global")
     const globalDoc = await globalRef.get()
@@ -84,6 +91,12 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    // Verify admin access
+    const adminResult = await verifyAdminAccess(request)
+    if ("error" in adminResult) {
+      return adminResult.error
+    }
+
     const body = await request.json()
     const { type, date, day, isRestricted, reason } = body
 
@@ -149,6 +162,12 @@ export async function POST(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
+    // Verify admin access
+    const adminResult = await verifyAdminAccess(request)
+    if ("error" in adminResult) {
+      return adminResult.error
+    }
+
     const url = new URL(request.url)
     const date = url.searchParams.get("date")
 
@@ -185,6 +204,12 @@ export async function DELETE(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
+    // Verify admin access
+    const adminResult = await verifyAdminAccess(request)
+    if ("error" in adminResult) {
+      return adminResult.error
+    }
+
     const body = await request.json()
     const { isPayoutAllowed, isPayoutNotAllowedReason } = body
 
@@ -217,6 +242,12 @@ export async function PUT(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   try {
+    // Verify admin access
+    const adminResult = await verifyAdminAccess(request)
+    if ("error" in adminResult) {
+      return adminResult.error
+    }
+
     const body = await request.json()
     const { isMaintenance, maintenanceReason } = body
 
