@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { adminDb, admin } from "@/lib/firebase-admin"
+import { adminDb } from "@/lib/firebase-admin"
+import { FieldValue } from "firebase-admin/firestore"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -16,7 +17,7 @@ export async function PATCH(request: NextRequest) {
       const logsRef = adminDb.collection("maintenanceLogs")
       await logsRef.add({
         reason: maintenanceReason || null,
-        enabledAt: admin.firestore.FieldValue.serverTimestamp(),
+        enabledAt: FieldValue.serverTimestamp(),
         disabledAt: null,
       })
     } else {
@@ -27,7 +28,7 @@ export async function PATCH(request: NextRequest) {
       if (!snapshot.empty) {
         const latestLog = snapshot.docs[0]
         await latestLog.ref.update({
-          disabledAt: admin.firestore.FieldValue.serverTimestamp(),
+          disabledAt: FieldValue.serverTimestamp(),
         })
       }
     }
@@ -36,7 +37,7 @@ export async function PATCH(request: NextRequest) {
       {
         isMaintenance,
         maintenanceReason: isMaintenance ? maintenanceReason || null : null,
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
       },
       { merge: true },
     )

@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { adminDb, admin } from "@/lib/firebase-admin"
+import { adminDb } from "@/lib/firebase-admin"
+import { FieldValue } from "firebase-admin/firestore"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -26,8 +27,8 @@ export async function POST(request: NextRequest) {
       {
         isRestricted,
         reason: reason || null,
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
       },
       { merge: true },
     )

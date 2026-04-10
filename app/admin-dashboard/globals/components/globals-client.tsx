@@ -234,7 +234,7 @@ export function GlobalsClient() {
             </div>
             <Textarea
               value={newDateReason}
-              onChange={(e) => setNewDateReason(e.target.value)}
+              onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setNewDateReason(e.target.value)}
               placeholder="Reason for restriction (optional)"
               className="text-sm"
               rows={2}
@@ -281,7 +281,7 @@ export function GlobalsClient() {
                   <div className="flex items-center gap-3 flex-1">
                     <Switch
                       checked={dayObj.isRestricted}
-                      onCheckedChange={(checked) => handleRestrictedDayToggle(day, checked)}
+                      onCheckedChange={(checked: boolean) => handleRestrictedDayToggle(day, checked)}
                     />
                     <span className="font-medium text-sm text-gray-900">{day}</span>
                   </div>
@@ -347,7 +347,7 @@ export function GlobalsClient() {
                   <div className="mt-2">
                     <Textarea
                       value={payoutReason}
-                      onChange={(e) => setPayoutReason(e.target.value)}
+                      onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setPayoutReason(e.target.value)}
                       placeholder="Reason for disabling payouts (optional)"
                       className="text-sm"
                       rows={2}
@@ -393,7 +393,7 @@ export function GlobalsClient() {
             </div>
             <Textarea
               value={maintenanceReason}
-              onChange={(e) => setMaintenanceReason(e.target.value)}
+              onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setMaintenanceReason(e.target.value)}
               placeholder="Enter the reason for maintenance..."
               rows={3}
             />

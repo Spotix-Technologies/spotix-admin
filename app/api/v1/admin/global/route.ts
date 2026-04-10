@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { adminDb, admin } from "@/lib/firebase-admin"
+import { adminDb } from "@/lib/firebase-admin"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
     const globalRef = adminDb.collection("admin").doc("global")
     const globalDoc = await globalRef.get()
     const globalSettings: GlobalSettings = globalDoc.exists
-      ? globalDoc.data()
+      ? (globalDoc.data() as GlobalSettings)
       : { isPayoutAllowed: true, isMaintenance: false }
 
     // Get restricted dates
@@ -43,8 +43,8 @@ export async function GET(request: NextRequest) {
     const restrictedDates: RestrictedDate[] = []
     restrictedDatesSnapshot.forEach((doc) => {
       restrictedDates.push({
-        date: doc.id,
         ...(doc.data() as RestrictedDate),
+        date: doc.id,
       })
     })
 
@@ -54,8 +54,8 @@ export async function GET(request: NextRequest) {
     const restrictedDays: RestrictedDay[] = []
     restrictedDaysSnapshot.forEach((doc) => {
       restrictedDays.push({
-        day: doc.id,
         ...(doc.data() as RestrictedDay),
+        day: doc.id,
       })
     })
 
