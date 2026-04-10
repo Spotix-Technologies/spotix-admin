@@ -13,7 +13,7 @@ interface YearStatsProps {
   stats: StatsData
 }
 
-type ViewMode = "revenue" | "tickets" | "signups" | "transactionFees" | "totalEvents" | "paidEvents"
+type ViewMode = "revenue" | "tickets" | "signups" | "transactionFees" | "payout" | "payoutCount"
 
 function formatCurrency(amount: number): string {
   return new Intl.NumberFormat("en-NG", {
@@ -66,7 +66,7 @@ function PercentageIndicator({ current, previous }: { current: number; previous:
 export function YearStats({ stats }: YearStatsProps) {
   const [viewMode, setViewMode] = useState<ViewMode>("revenue")
 
-  const { totalRevenue, ticketsSold, usersSignedUp, totalTransactionFees, totalEvents, paidEvents, freeEvents } = stats.yearly
+  const { totalRevenue, ticketsSold, usersSignedUp, totalTransactionFees, payout, payoutCount } = stats.yearly
 
   const prevYearly = stats.previousYearly
 
@@ -81,15 +81,15 @@ export function YearStats({ stats }: YearStatsProps) {
       tickets: monthTickets,
       signups: month.usersSignedUp || 0,
       transactionFees: month.totalTransactionFees || 0,
-      totalEvents: month.totalEvents || 0,
-      paidEvents: month.paidEvents || 0,
+      payout: month.payout || 0,
+      payoutCount: month.payoutCount || 0,
     }
   })
 
   const allMonths = Array.from({ length: 12 }, (_, i) => {
     const monthAbbr = getMonthAbbreviation(i + 1)
     const existing = chartData.find((d) => d.month === monthAbbr)
-    return existing || { month: monthAbbr, revenue: 0, tickets: 0, signups: 0, transactionFees: 0, totalEvents: 0, paidEvents: 0 }
+    return existing || { month: monthAbbr, revenue: 0, tickets: 0, signups: 0, transactionFees: 0, payout: 0, payoutCount: 0 }
   })
 
   const chartConfig = {
@@ -97,8 +97,8 @@ export function YearStats({ stats }: YearStatsProps) {
     tickets: { label: "Tickets", color: "#22c55e" },
     signups: { label: "Sign-ups", color: "#3b82f6" },
     transactionFees: { label: "Transaction Fees", color: "#f59e0b" },
-    totalEvents: { label: "Total Events", color: "#f97316" },
-    paidEvents: { label: "Paid Events", color: "#06b6d4" },
+    payout: { label: "Payout", color: "#f97316" },
+    payoutCount: { label: "Payout Count", color: "#06b6d4" },
   }
 
   const dataKey = viewMode
@@ -147,18 +147,18 @@ export function YearStats({ stats }: YearStatsProps) {
               Fees
             </ToggleGroupItem>
             <ToggleGroupItem
-              value="totalEvents"
-              aria-label="View total events"
+              value="payout"
+              aria-label="View payout"
               className="text-[10px] md:text-xs h-7 md:h-8 px-2 md:px-3"
             >
-              Events
+              Payout
             </ToggleGroupItem>
             <ToggleGroupItem
-              value="paidEvents"
-              aria-label="View paid events"
+              value="payoutCount"
+              aria-label="View payout count"
               className="text-[10px] md:text-xs h-7 md:h-8 px-2 md:px-3"
             >
-              Paid Events
+              Payout Count
             </ToggleGroupItem>
           </ToggleGroup>
         </div>
@@ -222,27 +222,27 @@ export function YearStats({ stats }: YearStatsProps) {
           <div className="p-2 md:p-4 rounded-lg bg-orange-50 border border-orange-100">
             <div className="flex items-center justify-between mb-1 md:mb-2 flex-wrap gap-1">
               <div className="flex items-center gap-1 md:gap-2">
-                <Ticket className="w-3 h-3 md:w-4 md:h-4 text-orange-600" />
-                <span className="text-[10px] md:text-xs font-medium text-orange-600">Total Events</span>
+                <Banknote className="w-3 h-3 md:w-4 md:h-4 text-orange-600" />
+                <span className="text-[10px] md:text-xs font-medium text-orange-600">Total Payout</span>
               </div>
-              <PercentageIndicator current={totalEvents} previous={prevYearly.totalEvents} />
+              <PercentageIndicator current={payout} previous={prevYearly.payout} />
             </div>
-            <p className="text-sm md:text-xl font-bold text-orange-900">{formatNumber(totalEvents)}</p>
-            <p className="text-[10px] md:text-xs text-orange-600/70 mt-0.5 md:mt-1">
-              vs {formatNumber(prevYearly.totalEvents)}
+            <p className="text-sm md:text-xl font-bold text-orange-900 truncate">{formatCurrency(payout)}</p>
+            <p className="text-[10px] md:text-xs text-orange-600/70 mt-0.5 md:mt-1 truncate">
+              vs {formatCurrency(prevYearly.payout)}
             </p>
           </div>
           <div className="p-2 md:p-4 rounded-lg bg-cyan-50 border border-cyan-100">
             <div className="flex items-center justify-between mb-1 md:mb-2 flex-wrap gap-1">
               <div className="flex items-center gap-1 md:gap-2">
                 <Ticket className="w-3 h-3 md:w-4 md:h-4 text-cyan-600" />
-                <span className="text-[10px] md:text-xs font-medium text-cyan-600">Paid Events</span>
+                <span className="text-[10px] md:text-xs font-medium text-cyan-600">Payout Count</span>
               </div>
-              <PercentageIndicator current={paidEvents} previous={prevYearly.paidEvents} />
+              <PercentageIndicator current={payoutCount} previous={prevYearly.payoutCount} />
             </div>
-            <p className="text-sm md:text-xl font-bold text-cyan-900">{formatNumber(paidEvents)}</p>
+            <p className="text-sm md:text-xl font-bold text-cyan-900">{formatNumber(payoutCount)}</p>
             <p className="text-[10px] md:text-xs text-cyan-600/70 mt-0.5 md:mt-1">
-              vs {formatNumber(prevYearly.paidEvents)}
+              vs {formatNumber(prevYearly.payoutCount)}
             </p>
           </div>
         </div>

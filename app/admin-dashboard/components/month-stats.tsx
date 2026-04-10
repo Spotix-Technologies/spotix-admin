@@ -13,7 +13,7 @@ interface MonthStatsProps {
   stats: StatsData
 }
 
-type ViewMode = "revenue" | "tickets" | "signups" | "transactionFees" | "totalEvents" | "paidEvents"
+type ViewMode = "revenue" | "tickets" | "signups" | "transactionFees" | "payout" | "payoutCount"
 
 function formatCurrency(amount: number): string {
   return new Intl.NumberFormat("en-NG", {
@@ -76,7 +76,7 @@ function getPreviousMonthName(currentMonth: string): string {
 export function MonthStats({ stats }: MonthStatsProps) {
   const [viewMode, setViewMode] = useState<ViewMode>("revenue")
 
-  const { ticketsSold, totalRevenue, usersSignedUp, totalTransactionFees, totalEvents, paidEvents, freeEvents } = stats.monthly.current
+  const { ticketsSold, totalRevenue, usersSignedUp, totalTransactionFees, payout, payoutCount } = stats.monthly.current
 
   const prevMonth = stats.monthly.previous
   const prevMonthName = getPreviousMonthName(stats.currentMonth)
@@ -95,8 +95,8 @@ export function MonthStats({ stats }: MonthStatsProps) {
       tickets: dayTickets,
       signups: day.usersSignedUp || 0,
       transactionFees: day.totalTransactionFees || 0,
-      totalEvents: day.totalEvents || 0,
-      paidEvents: day.paidEvents || 0,
+      payout: day.payout || 0,
+      payoutCount: day.payoutCount || 0,
     }
   })
 
@@ -105,8 +105,8 @@ export function MonthStats({ stats }: MonthStatsProps) {
     tickets: { label: "Tickets", color: "#22c55e" },
     signups: { label: "Sign-ups", color: "#3b82f6" },
     transactionFees: { label: "Transaction Fees", color: "#f59e0b" },
-    totalEvents: { label: "Total Events", color: "#f97316" },
-    paidEvents: { label: "Paid Events", color: "#06b6d4" },
+    payout: { label: "Payout", color: "#f97316" },
+    payoutCount: { label: "Payout Count", color: "#06b6d4" },
   }
 
   const dataKey = viewMode
@@ -155,18 +155,18 @@ export function MonthStats({ stats }: MonthStatsProps) {
               Fees
             </ToggleGroupItem>
             <ToggleGroupItem
-              value="totalEvents"
-              aria-label="View total events"
+              value="payout"
+              aria-label="View payout"
               className="text-[10px] md:text-xs h-7 md:h-8 px-2 md:px-3"
             >
-              Events
+              Payout
             </ToggleGroupItem>
             <ToggleGroupItem
-              value="paidEvents"
-              aria-label="View paid events"
+              value="payoutCount"
+              aria-label="View payout count"
               className="text-[10px] md:text-xs h-7 md:h-8 px-2 md:px-3"
             >
-              Paid Events
+              Payout Count
             </ToggleGroupItem>
           </ToggleGroup>
         </div>
@@ -230,27 +230,27 @@ export function MonthStats({ stats }: MonthStatsProps) {
           <div className="p-2 md:p-4 rounded-lg bg-orange-50 border border-orange-100">
             <div className="flex items-center justify-between mb-1 md:mb-2 flex-wrap gap-1">
               <div className="flex items-center gap-1 md:gap-2">
-                <Ticket className="w-3 h-3 md:w-4 md:h-4 text-orange-600" />
-                <span className="text-[10px] md:text-xs font-medium text-orange-600">Total Events</span>
+                <Banknote className="w-3 h-3 md:w-4 md:h-4 text-orange-600" />
+                <span className="text-[10px] md:text-xs font-medium text-orange-600">Monthly Payout</span>
               </div>
-              <PercentageIndicator current={totalEvents} previous={prevMonth.totalEvents} />
+              <PercentageIndicator current={payout} previous={prevMonth.payout} />
             </div>
-            <p className="text-sm md:text-xl font-bold text-orange-900">{formatNumber(totalEvents)}</p>
-            <p className="text-[10px] md:text-xs text-orange-600/70 mt-0.5 md:mt-1">
-              vs {formatNumber(prevMonth.totalEvents)}
+            <p className="text-sm md:text-xl font-bold text-orange-900 truncate">{formatCurrency(payout)}</p>
+            <p className="text-[10px] md:text-xs text-orange-600/70 mt-0.5 md:mt-1 truncate">
+              vs {formatCurrency(prevMonth.payout)}
             </p>
           </div>
           <div className="p-2 md:p-4 rounded-lg bg-cyan-50 border border-cyan-100">
             <div className="flex items-center justify-between mb-1 md:mb-2 flex-wrap gap-1">
               <div className="flex items-center gap-1 md:gap-2">
                 <Ticket className="w-3 h-3 md:w-4 md:h-4 text-cyan-600" />
-                <span className="text-[10px] md:text-xs font-medium text-cyan-600">Paid Events</span>
+                <span className="text-[10px] md:text-xs font-medium text-cyan-600">Payout Count</span>
               </div>
-              <PercentageIndicator current={paidEvents} previous={prevMonth.paidEvents} />
+              <PercentageIndicator current={payoutCount} previous={prevMonth.payoutCount} />
             </div>
-            <p className="text-sm md:text-xl font-bold text-cyan-900">{formatNumber(paidEvents)}</p>
+            <p className="text-sm md:text-xl font-bold text-cyan-900">{formatNumber(payoutCount)}</p>
             <p className="text-[10px] md:text-xs text-cyan-600/70 mt-0.5 md:mt-1">
-              vs {formatNumber(prevMonth.paidEvents)}
+              vs {formatNumber(prevMonth.payoutCount)}
             </p>
           </div>
         </div>

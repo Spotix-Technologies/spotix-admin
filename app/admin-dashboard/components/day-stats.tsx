@@ -13,7 +13,7 @@ interface DayStatsProps {
   stats: StatsData
 }
 
-type ViewMode = "revenue" | "tickets" | "signups" | "transactionFees" | "totalEvents" | "paidEvents"
+type ViewMode = "revenue" | "tickets" | "signups" | "transactionFees" | "payout" | "payoutCount"
 type CompareMode = "1" | "3" | "7"
 
 function formatCurrency(amount: number): string {
@@ -114,7 +114,7 @@ export function DayStats({ stats }: DayStatsProps) {
   const [viewMode, setViewMode] = useState<ViewMode>("revenue")
   const [compareMode, setCompareMode] = useState<CompareMode>("1")
 
-  const { ticketsSold, totalRevenue, usersSignedUp, totalTransactionFees, totalEvents, paidEvents, freeEvents } = stats.daily.today
+  const { ticketsSold, totalRevenue, usersSignedUp, totalTransactionFees, payout, payoutCount } = stats.daily.today
 
   // Calculate previous days dates
   const previousDaysDates = useMemo(() => {
@@ -157,9 +157,8 @@ export function DayStats({ stats }: DayStatsProps) {
     totalRevenue: 0,
     usersSignedUp: 0,
     totalTransactionFees: 0,
-    totalEvents: 0,
-    paidEvents: 0,
-    freeEvents: 0,
+    payout: 0,
+    payoutCount: 0,
   }
 
   // Parse current day for display
@@ -178,9 +177,8 @@ export function DayStats({ stats }: DayStatsProps) {
         totalRevenue: 0,
         usersSignedUp: 0,
         totalTransactionFees: 0,
-        totalEvents: 0,
-        paidEvents: 0,
-        freeEvents: 0,
+        payout: 0,
+        payoutCount: 0,
       }
 
       const dayTickets = dayData.ticketsSold || 0
@@ -193,9 +191,8 @@ export function DayStats({ stats }: DayStatsProps) {
         tickets: dayTickets,
         signups: dayData.usersSignedUp || 0,
         transactionFees: dayData.totalTransactionFees || 0,
-        totalEvents: dayData.totalEvents || 0,
-        paidEvents: dayData.paidEvents || 0,
-        freeEvents: dayData.freeEvents || 0,
+        payout: dayData.payout || 0,
+        payoutCount: dayData.payoutCount || 0,
       }
     })
 
@@ -207,9 +204,8 @@ export function DayStats({ stats }: DayStatsProps) {
       tickets: ticketsSold,
       signups: usersSignedUp,
       transactionFees: totalTransactionFees,
-      totalEvents: totalEvents,
-      paidEvents: paidEvents,
-      freeEvents: freeEvents,
+      payout: payout,
+      payoutCount: payoutCount,
     })
 
     return chartDays
@@ -222,9 +218,8 @@ export function DayStats({ stats }: DayStatsProps) {
     totalRevenue,
     usersSignedUp,
     totalTransactionFees,
-    totalEvents,
-    paidEvents,
-    freeEvents,
+    payout,
+    payoutCount,
   ])
 
 
@@ -234,8 +229,8 @@ export function DayStats({ stats }: DayStatsProps) {
     tickets: { label: "Tickets", color: "#22c55e" },
     signups: { label: "Sign-ups", color: "#3b82f6" },
     transactionFees: { label: "Transaction Fees", color: "#f59e0b" },
-    totalEvents: { label: "Total Events", color: "#f97316" },
-    paidEvents: { label: "Paid Events", color: "#06b6d4" },
+    payout: { label: "Payout", color: "#f97316" },
+    payoutCount: { label: "Payout Count", color: "#06b6d4" },
   }
 
   const dataKey = viewMode
@@ -246,6 +241,8 @@ export function DayStats({ stats }: DayStatsProps) {
     green: "bg-green-100 border-green-200 text-green-900",
     blue: "bg-blue-100 border-blue-200 text-blue-900",
     amber: "bg-amber-100 border-amber-200 text-amber-900",
+    orange: "bg-orange-100 border-orange-200 text-orange-900",
+    cyan: "bg-cyan-100 border-cyan-200 text-cyan-900",
   }
 
   const highlightValue = () => {
@@ -258,10 +255,10 @@ export function DayStats({ stats }: DayStatsProps) {
         return { label: "Sign-ups Today", value: formatNumber(usersSignedUp), color: "blue" }
       case "transactionFees":
         return { label: "Transaction Fees Today", value: formatCurrency(totalTransactionFees), color: "amber" }
-      case "totalEvents":
-        return { label: "Total Events Today", value: formatNumber(totalEvents), color: "orange" }
-      case "paidEvents":
-        return { label: "Paid Events Today", value: formatNumber(paidEvents), color: "cyan" }
+      case "payout":
+        return { label: "Today's Payout", value: formatCurrency(payout), color: "orange" }
+      case "payoutCount":
+        return { label: "Payout Requests Today", value: formatNumber(payoutCount), color: "cyan" }
     }
   }
 
@@ -313,18 +310,18 @@ export function DayStats({ stats }: DayStatsProps) {
               Fees
             </ToggleGroupItem>
             <ToggleGroupItem
-              value="totalEvents"
-              aria-label="View total events"
+              value="payout"
+              aria-label="View payout"
               className="text-[10px] md:text-xs h-7 md:h-8 px-2 md:px-3"
             >
-              Events
+              Payout
             </ToggleGroupItem>
             <ToggleGroupItem
-              value="paidEvents"
-              aria-label="View paid events"
+              value="payoutCount"
+              aria-label="View payout count"
               className="text-[10px] md:text-xs h-7 md:h-8 px-2 md:px-3"
             >
-              Paid Events
+              Payout Count
             </ToggleGroupItem>
           </ToggleGroup>
         </div>
@@ -346,11 +343,11 @@ export function DayStats({ stats }: DayStatsProps) {
             {viewMode === "transactionFees" && (
               <PercentageIndicator current={totalTransactionFees} previous={yesterdayData.totalTransactionFees || 0} />
             )}
-            {viewMode === "totalEvents" && (
-              <PercentageIndicator current={totalEvents} previous={yesterdayData.totalEvents || 0} />
+            {viewMode === "payout" && (
+              <PercentageIndicator current={payout} previous={yesterdayData.payout || 0} />
             )}
-            {viewMode === "paidEvents" && (
-              <PercentageIndicator current={paidEvents} previous={yesterdayData.paidEvents || 0} />
+            {viewMode === "payoutCount" && (
+              <PercentageIndicator current={payoutCount} previous={yesterdayData.payoutCount || 0} />
             )}
           </div>
           <p className="text-xs md:text-sm font-medium mb-1 md:mb-2">{highlight.label}</p>
@@ -415,27 +412,27 @@ export function DayStats({ stats }: DayStatsProps) {
           <div className="p-2 md:p-4 rounded-lg bg-orange-50 border border-orange-100">
             <div className="flex items-center justify-between mb-1 md:mb-2 flex-wrap gap-1">
               <div className="flex items-center gap-1 md:gap-2">
-                <Ticket className="w-3 h-3 md:w-4 md:h-4 text-orange-600" />
-                <span className="text-[10px] md:text-xs font-medium text-orange-600">Total Events</span>
+                <Banknote className="w-3 h-3 md:w-4 md:h-4 text-orange-600" />
+                <span className="text-[10px] md:text-xs font-medium text-orange-600">Payout</span>
               </div>
-              <PercentageIndicator current={totalEvents} previous={yesterdayData.totalEvents || 0} />
+              <PercentageIndicator current={payout} previous={yesterdayData.payout || 0} />
             </div>
-            <p className="text-sm md:text-lg font-bold text-orange-900">{formatNumber(totalEvents)}</p>
-            <p className="text-[10px] md:text-xs text-orange-600/70 mt-0.5 md:mt-1">
-              vs {formatNumber(yesterdayData.totalEvents || 0)}
+            <p className="text-sm md:text-lg font-bold text-orange-900 truncate">{formatCurrency(payout)}</p>
+            <p className="text-[10px] md:text-xs text-orange-600/70 mt-0.5 md:mt-1 truncate">
+              vs {formatCurrency(yesterdayData.payout || 0)}
             </p>
           </div>
           <div className="p-2 md:p-4 rounded-lg bg-cyan-50 border border-cyan-100">
             <div className="flex items-center justify-between mb-1 md:mb-2 flex-wrap gap-1">
               <div className="flex items-center gap-1 md:gap-2">
                 <Ticket className="w-3 h-3 md:w-4 md:h-4 text-cyan-600" />
-                <span className="text-[10px] md:text-xs font-medium text-cyan-600">Paid Events</span>
+                <span className="text-[10px] md:text-xs font-medium text-cyan-600">Payout Count</span>
               </div>
-              <PercentageIndicator current={paidEvents} previous={yesterdayData.paidEvents || 0} />
+              <PercentageIndicator current={payoutCount} previous={yesterdayData.payoutCount || 0} />
             </div>
-            <p className="text-sm md:text-lg font-bold text-cyan-900">{formatNumber(paidEvents)}</p>
+            <p className="text-sm md:text-lg font-bold text-cyan-900">{formatNumber(payoutCount)}</p>
             <p className="text-[10px] md:text-xs text-cyan-600/70 mt-0.5 md:mt-1">
-              vs {formatNumber(yesterdayData.paidEvents || 0)}
+              vs {formatNumber(yesterdayData.payoutCount || 0)}
             </p>
           </div>
         </div>
