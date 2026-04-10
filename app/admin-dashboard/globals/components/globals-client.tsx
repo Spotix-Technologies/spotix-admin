@@ -51,6 +51,7 @@ export function GlobalsClient() {
   const [maintenanceReason, setMaintenanceReason] = useState("")
   const [showMaintenanceDialog, setShowMaintenanceDialog] = useState(false)
   const [payoutReason, setPayoutReason] = useState("")
+  const [showPayoutDialog, setShowPayoutDialog] = useState(false)
   const [copied, setCopied] = useState(false)
 
   // Fetch global settings on mount
@@ -171,19 +172,30 @@ export function GlobalsClient() {
     }
   }
 
-  const handlePayoutAllowToggle = async (allowed: boolean) => {
+  const handlePayoutAllowToggle = (allowed: boolean) => {
+    if (!allowed) {
+      // Show dialog to get reason for disabling
+      setShowPayoutDialog(true)
+    } else {
+      // Enable payouts without needing a reason
+      submitPayoutChange(true, "")
+    }
+  }
+
+  const submitPayoutChange = async (allowed: boolean, reason: string) => {
     try {
       const response = await fetch("/api/v1/admin/global/payout-allow", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           isPayoutAllowed: allowed,
-          isPayoutNotAllowedReason: allowed ? "" : payoutReason,
+          isPayoutNotAllowedReason: allowed ? "" : reason,
         }),
       })
 
       if (!response.ok) throw new Error("Failed to update payout settings")
       setPayoutReason("")
+      setShowPayoutDialog(false)
       await fetchGlobalSettings()
     } catch (err) {
       setError(err instanceof Error ? err.message : "An error occurred")
@@ -199,7 +211,7 @@ export function GlobalsClient() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 p-6 pb-8">
       <div>
         <h1 className="text-2xl md:text-3xl font-bold text-gray-900">Global Settings</h1>
         <p className="text-gray-600 mt-2">Manage platform-wide configurations and restrictions</p>
@@ -344,22 +356,13 @@ export function GlobalsClient() {
                   </p>
                 )}
                 {!globalSettings.isPayoutAllowed && (
-                  <div className="mt-2">
-                    <Textarea
-                      value={payoutReason}
-                      onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setPayoutReason(e.target.value)}
-                      placeholder="Reason for disabling payouts (optional)"
-                      className="text-sm"
-                      rows={2}
-                    />
-                    <Button
-                      onClick={() => handlePayoutAllowToggle(true)}
-                      className="mt-2 bg-green-600 hover:bg-green-700"
-                      size="sm"
-                    >
-                      Enable Payouts
-                    </Button>
-                  </div>
+                  <Button
+                    onClick={() => handlePayoutAllowToggle(true)}
+                    className="mt-2 bg-green-600 hover:bg-green-700"
+                    size="sm"
+                  >
+                    Enable Payouts
+                  </Button>
                 )}
               </div>
               {globalSettings.isPayoutAllowed && (
@@ -404,6 +407,44 @@ export function GlobalsClient() {
             </Button>
             <Button onClick={handleConfirmMaintenance} className="bg-red-600 hover:bg-red-700" disabled={!maintenanceReason}>
               Confirm & Enable
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Payout Disable Dialog */}
+      <Dialog open={showPayoutDialog} onOpenChange={setShowPayoutDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-600">
+              <AlertTriangle className="w-5 h-5" />
+              Disable Payouts
+            </DialogTitle>
+            <DialogDescription>
+              Disabling payouts will prevent users from requesting withdrawals. A reason is required for this action.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="p-3 bg-red-50 border border-red-200 rounded text-sm text-red-800">
+              This action will stop all payout requests from being processed.
+            </div>
+            <Textarea
+              value={payoutReason}
+              onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setPayoutReason(e.target.value)}
+              placeholder="Enter the reason for disabling payouts..."
+              rows={3}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowPayoutDialog(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => submitPayoutChange(false, payoutReason)}
+              className="bg-red-600 hover:bg-red-700"
+              disabled={!payoutReason}
+            >
+              Confirm & Disable Payouts
             </Button>
           </DialogFooter>
         </DialogContent>
