@@ -1,11 +1,18 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { adminDb } from "@/lib/firebase-admin"
+import { verifyAdminAccess } from "@/lib/verify-admin"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
 export async function POST(request: NextRequest) {
   try {
+    // Verify admin access
+    const adminResult = await verifyAdminAccess(request)
+    if ("error" in adminResult) {
+      return adminResult.error
+    }
+
     const body = await request.json()
     const { date, isRestricted, reason } = body
 

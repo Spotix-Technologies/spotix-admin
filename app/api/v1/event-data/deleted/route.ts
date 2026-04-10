@@ -1,27 +1,21 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { adminDb } from "@/lib/firebase-admin"
+import { verifyAdminAccess } from "@/lib/verify-admin"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
 const DEV_TAG = "API developed and maintained by Spotix Technologies"
 
-function getAdminFromHeaders(request: NextRequest): { uid: string; username: string } | null {
-  const isAdmin = request.headers.get("x-is-admin")
-  const uid = request.headers.get("x-user-uid")
-  const username =
-    request.headers.get("x-user-username") ||
-    request.headers.get("x-user-fullname") ||
-    "Unknown Admin"
-  if (isAdmin !== "true" || !uid) return null
-  return { uid, username }
-}
-
 /* GET — list all deleted events */
 export async function GET(request: NextRequest) {
   try {
-    if (request.headers.get("x-is-admin") !== "true") {
-      return NextResponse.json({ error: "Forbidden: admin access required", developer: DEV_TAG }, { status: 403 })
+    // Verify admin access
+    const adminResult = await verifyAdminAccess(request)
+    if ("error" in adminResult) {
+      const response = adminResult.error as NextResponse
+      const json = await response.json() as any
+      return NextResponse.json({ error: json.error || "Forbidden: admin access required", developer: DEV_TAG }, { status: response.status })
     }
 
     const snap = await adminDb
@@ -54,10 +48,14 @@ export async function GET(request: NextRequest) {
 /* POST — restore a deleted event back to events/ */
 export async function POST(request: NextRequest) {
   try {
-    const admin = getAdminFromHeaders(request)
-    if (!admin) {
-      return NextResponse.json({ error: "Forbidden: admin access required", developer: DEV_TAG }, { status: 403 })
+    // Verify admin access
+    const adminResult = await verifyAdminAccess(request)
+    if ("error" in adminResult) {
+      const response = adminResult.error as NextResponse
+      const json = await response.json() as any
+      return NextResponse.json({ error: json.error || "Forbidden: admin access required", developer: DEV_TAG }, { status: response.status })
     }
+    const admin = adminResult
 
     const body = await request.json()
     const { eventId } = body
