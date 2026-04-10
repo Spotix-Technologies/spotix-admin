@@ -52,7 +52,7 @@ export function GlobalsClient() {
   const [showMaintenanceDialog, setShowMaintenanceDialog] = useState(false)
   const [payoutReason, setPayoutReason] = useState("")
   const [showPayoutDialog, setShowPayoutDialog] = useState(false)
-  const [copied, setCopied] = useState(false)
+  const [dayReasons, setDayReasons] = useState<Record<string, string>>({})
 
   // Fetch global settings on mount
   useEffect(() => {
@@ -77,7 +77,7 @@ export function GlobalsClient() {
   }
 
   const handleAddRestrictedDate = async () => {
-    if (!newDate) return
+    if (!newDate || !newDateReason) return
 
     try {
       const response = await fetch("/api/v1/admin/global/restricted-date", {
@@ -112,19 +112,30 @@ export function GlobalsClient() {
   }
 
   const handleRestrictedDayToggle = async (day: string, isRestricted: boolean) => {
+    if (isRestricted && !dayReasons[day]) {
+      setError("Reason is required for restricting a day")
+      return
+    }
+
     try {
-      const dayObj = restrictedDays.find((d) => d.day === day)
       const response = await fetch("/api/v1/admin/global/restricted-day", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           day,
           isRestricted,
-          reason: dayObj?.reason || "",
+          reason: isRestricted ? dayReasons[day] : "",
         }),
       })
 
       if (!response.ok) throw new Error("Failed to update restricted day")
+      if (!isRestricted) {
+        setDayReasons((prev) => {
+          const updated = { ...prev }
+          delete updated[day]
+          return updated
+        })
+      }
       await fetchGlobalSettings()
     } catch (err) {
       setError(err instanceof Error ? err.message : "An error occurred")
@@ -211,7 +222,7 @@ export function GlobalsClient() {
   }
 
   return (
-    <div className="space-y-6 p-6 pb-8">
+    <div className="space-y-6 p-6 max-h-screen overflow-y-auto">
       <div>
         <h1 className="text-2xl md:text-3xl font-bold text-gray-900">Global Settings</h1>
         <p className="text-gray-600 mt-2">Manage platform-wide configurations and restrictions</p>
@@ -239,7 +250,7 @@ export function GlobalsClient() {
                 placeholder="Select a date"
                 className="flex-1"
               />
-              <Button onClick={handleAddRestrictedDate} disabled={!newDate} className="bg-[#6b2fa5] hover:bg-[#5a1a8a]">
+              <Button onClick={handleAddRestrictedDate} disabled={!newDate || !newDateReason} className="bg-[#6b2fa5] hover:bg-[#5a1a8a]">
                 <Plus className="w-4 h-4 mr-2" />
                 Add Date
               </Button>
@@ -247,11 +258,17 @@ export function GlobalsClient() {
             <Textarea
               value={newDateReason}
               onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setNewDateReason(e.target.value)}
-              placeholder="Reason for restriction (optional)"
+              placeholder="Reason for restriction (required)"
               className="text-sm"
               rows={2}
             />
           </div>
+
+          {newDate && (
+            <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <p className="text-sm font-medium text-blue-900">Selected date: {new Date(newDate).toLocaleDateString()}</p>
+            </div>
+          )}
 
           {restrictedDates.length > 0 ? (
             <div className="space-y-2 mt-4 pt-4 border-t">
@@ -285,19 +302,29 @@ export function GlobalsClient() {
           <CardDescription>Disable payouts on specific days of the week</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="space-y-3">
+          <div className="space-y-4">
             {DAYS_OF_WEEK.map((day) => {
               const dayObj = restrictedDays.find((d) => d.day === day) || { day, isRestricted: false }
               return (
-                <div key={day} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                  <div className="flex items-center gap-3 flex-1">
+                <div key={day} className="p-3 bg-gray-50 rounded-lg space-y-2">
+                  <div className="flex items-center gap-3">
                     <Switch
                       checked={dayObj.isRestricted}
                       onCheckedChange={(checked: boolean) => handleRestrictedDayToggle(day, checked)}
                     />
                     <span className="font-medium text-sm text-gray-900">{day}</span>
                   </div>
-                  {dayObj.reason && <p className="text-xs text-gray-600">{dayObj.reason}</p>}
+                  {dayObj.isRestricted && (
+                    <Textarea
+                      value={dayReasons[day] || dayObj.reason || ""}
+                      onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
+                        setDayReasons((prev) => ({ ...prev, [day]: e.target.value }))
+                      }
+                      placeholder="Reason for restricting this day (required)"
+                      className="text-sm"
+                      rows={2}
+                    />
+                  )}
                 </div>
               )
             })}
