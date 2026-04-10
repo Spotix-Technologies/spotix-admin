@@ -97,7 +97,7 @@ export async function POST(request: NextRequest) {
         {
           isRestricted,
           reason: reason || null,
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
         },
         { merge: true },
       )
@@ -119,7 +119,7 @@ export async function POST(request: NextRequest) {
         {
           isRestricted,
           reason: reason || null,
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
         },
         { merge: true },
       )
@@ -193,7 +193,7 @@ export async function PUT(request: NextRequest) {
       {
         isPayoutAllowed,
         isPayoutNotAllowedReason: isPayoutNotAllowedReason || null,
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
       },
       { merge: true },
     )
@@ -227,7 +227,7 @@ export async function PATCH(request: NextRequest) {
       await logsRef.add({
         isMaintenance: true,
         reason: maintenanceReason || null,
-        enabledAt: admin.firestore.FieldValue.serverTimestamp(),
+        enabledAt: FieldValue.serverTimestamp(),
         disabledAt: null,
       })
     }
@@ -236,7 +236,7 @@ export async function PATCH(request: NextRequest) {
       {
         isMaintenance,
         maintenanceReason: isMaintenance ? maintenanceReason || null : null,
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
       },
       { merge: true },
     )
