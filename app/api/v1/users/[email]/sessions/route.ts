@@ -5,16 +5,6 @@ import { verifyAdminAccess } from "@/lib/verify-admin"
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
-export interface UserSession {
-  sessionId: string
-  ipAddress: string
-  userAgent: string
-  country?: string
-  city?: string
-  lastActivity: string
-  createdAt: string
-}
-
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ email: string }> }
@@ -29,25 +19,37 @@ export async function GET(
     const { email } = await params
     const decodedEmail = decodeURIComponent(email)
 
-    // Get user's sessions
-    const sessionsRef = adminDb.collection("userSessions")
-    const snapshot = await sessionsRef
-      .where("userEmail", "==", decodedEmail)
-      .orderBy("lastActivity", "desc")
+    // Find user by email to get userId
+    const usersRef = adminDb.collection("users")
+    const userQuery = await usersRef.where("email", "==", decodedEmail).limit(1).get()
+
+    if (userQuery.empty) {
+      return NextResponse.json({ sessions: [] })
+    }
+
+    const userId = userQuery.docs[0].id
+
+    // Get user's refresh tokens (active sessions)
+    const refreshTokensRef = adminDb.collection("refreshTokens")
+    const tokensSnapshot = await refreshTokensRef
+      .where("userId", "==", userId)
+      .where("isRevoked", "==", false)
+      .orderBy("lastUsedAt", "desc")
       .limit(20)
       .get()
 
-    const sessions: UserSession[] = []
-    snapshot.forEach((doc) => {
+    const sessions: any[] = []
+    tokensSnapshot.forEach((doc) => {
       const data = doc.data()
       sessions.push({
-        sessionId: doc.id,
-        ipAddress: data.ipAddress || "Unknown",
-        userAgent: data.userAgent || "Unknown",
-        country: data.country,
-        city: data.city,
-        lastActivity: data.lastActivity || "",
-        createdAt: data.createdAt || "",
+        tokenId: doc.id,
+        deviceId: data.deviceId || "",
+        deviceMeta: data.deviceMeta || {},
+        appVersion: data.appVersion || "",
+        model: data.model || "",
+        platform: data.platform || "",
+        expiresAt: data.expiresAt || "",
+        lastUsedAt: data.lastUsedAt || "",
       })
     })
 

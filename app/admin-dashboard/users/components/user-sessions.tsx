@@ -1,26 +1,24 @@
 "use client"
 
-import type { UserSession } from "@/app/api/v1/users/[email]/sessions/route"
-import { AlertCircle, Globe } from "lucide-react"
+import { AlertCircle, Smartphone } from "lucide-react"
 
 interface UserSessionsProps {
-  sessions: UserSession[]
+  sessions: any[]
   loading: boolean
   error: string | null
 }
 
-export function UserSessionsComponent({
-  sessions,
-  loading,
-  error,
-}: UserSessionsProps) {
-  const getDeviceInfo = (userAgent: string) => {
-    if (!userAgent || userAgent === "Unknown") return "Unknown Device"
+export function UserSessionsComponent({ sessions, loading, error }: UserSessionsProps) {
+  const getPlatformIcon = (platform: string) => {
+    if (!platform) return "📱"
+    if (platform.toLowerCase().includes("ios")) return "🍎"
+    if (platform.toLowerCase().includes("android")) return "🤖"
+    if (platform.toLowerCase().includes("web")) return "🌐"
+    return "📱"
+  }
 
-    // Simple device detection
-    if (userAgent.includes("Mobile") || userAgent.includes("iPhone")) return "Mobile"
-    if (userAgent.includes("Tablet") || userAgent.includes("iPad")) return "Tablet"
-    return "Desktop"
+  const isExpired = (expiresAt: string) => {
+    return new Date(expiresAt) < new Date()
   }
 
   if (error) {
@@ -28,70 +26,79 @@ export function UserSessionsComponent({
       <div className="rounded-lg border border-red-200 bg-red-50 p-4">
         <div className="flex items-start gap-3">
           <AlertCircle className="h-5 w-5 text-red-600 mt-0.5 shrink-0" />
-          <p className="text-sm text-red-700">{error}</p>
+          <div>
+            <p className="font-semibold text-red-900">Error loading sessions</p>
+            <p className="text-sm text-red-700 mt-1">{error}</p>
+          </div>
         </div>
+      </div>
+    )
+  }
+
+  if (loading) {
+    return (
+      <div className="rounded-lg border border-slate-200 bg-slate-50 p-6">
+        <div className="h-32 bg-slate-200 rounded animate-pulse" />
+      </div>
+    )
+  }
+
+  if (!sessions || sessions.length === 0) {
+    return (
+      <div className="rounded-lg border border-slate-200 bg-slate-50 p-6 text-center">
+        <p className="text-slate-600">No active sessions</p>
       </div>
     )
   }
 
   return (
     <div className="rounded-lg border border-slate-200 bg-white overflow-hidden">
-      <div className="bg-gradient-to-r from-slate-50 to-slate-100 px-6 py-4 border-b border-slate-200">
-        <h3 className="font-semibold text-slate-900">Active Sessions</h3>
-      </div>
-
-      {loading ? (
-        <div className="p-6">
-          <div className="space-y-3">
-            {[...Array(3)].map((_, i) => (
-              <div key={i} className="h-16 bg-slate-200 rounded animate-pulse" />
-            ))}
-          </div>
-        </div>
-      ) : sessions.length === 0 ? (
-        <div className="p-6 text-center text-slate-600">
-          <p className="text-sm">No active sessions</p>
-        </div>
-      ) : (
-        <div className="divide-y divide-slate-200">
-          {sessions.map((session) => (
-            <div key={session.sessionId} className="p-4 hover:bg-slate-50 transition-colors">
-              <div className="flex items-start gap-4">
-                <div className="flex-1">
+      <div className="overflow-x-auto">
+        <table className="w-full">
+          <thead className="bg-slate-50 border-b border-slate-200">
+            <tr>
+              <th className="px-6 py-3 text-left text-xs font-semibold text-slate-900 uppercase tracking-wide">Device</th>
+              <th className="px-6 py-3 text-left text-xs font-semibold text-slate-900 uppercase tracking-wide">Platform</th>
+              <th className="px-6 py-3 text-left text-xs font-semibold text-slate-900 uppercase tracking-wide">Model</th>
+              <th className="px-6 py-3 text-left text-xs font-semibold text-slate-900 uppercase tracking-wide">App Version</th>
+              <th className="px-6 py-3 text-left text-xs font-semibold text-slate-900 uppercase tracking-wide">Last Used</th>
+              <th className="px-6 py-3 text-left text-xs font-semibold text-slate-900 uppercase tracking-wide">Expires</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-200">
+            {sessions.map((session, idx) => (
+              <tr key={idx} className="hover:bg-slate-50 transition-colors">
+                <td className="px-6 py-4 text-sm text-slate-900 font-medium">
                   <div className="flex items-center gap-2">
-                    <Globe className="h-5 w-5 text-slate-400" />
-                    <div>
-                      <p className="font-semibold text-slate-900">
-                        {getDeviceInfo(session.userAgent)}
-                      </p>
-                      <p className="text-xs text-slate-500 mt-1">
-                        {session.ipAddress}
-                        {session.country && ` • ${session.country}`}
-                        {session.city && ` (${session.city})`}
-                      </p>
-                    </div>
+                    <span>{getPlatformIcon(session.platform)}</span>
+                    {session.deviceId || "Unknown"}
                   </div>
-
-                  <div className="mt-3 space-y-1 text-xs text-slate-600">
-                    {session.userAgent !== "Unknown" && (
-                      <p className="text-xs text-slate-500 font-mono">
-                        {session.userAgent.substring(0, 60)}
-                        {session.userAgent.length > 60 ? "..." : ""}
-                      </p>
-                    )}
-                    <p>
-                      Last active: {new Date(session.lastActivity).toLocaleString()}
-                    </p>
-                    <p>
-                      Started: {new Date(session.createdAt).toLocaleString()}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+                </td>
+                <td className="px-6 py-4 text-sm text-slate-600">{session.platform || "-"}</td>
+                <td className="px-6 py-4 text-sm text-slate-600">{session.model || "-"}</td>
+                <td className="px-6 py-4 text-sm text-slate-600">{session.appVersion || "-"}</td>
+                <td className="px-6 py-4 text-sm text-slate-600">
+                  {session.lastUsedAt ? new Date(session.lastUsedAt).toLocaleString() : "-"}
+                </td>
+                <td className="px-6 py-4 text-sm">
+                  {session.expiresAt ? (
+                    <span className={isExpired(session.expiresAt) ? "text-red-600 font-semibold" : "text-slate-600"}>
+                      {new Date(session.expiresAt).toLocaleDateString()}
+                    </span>
+                  ) : (
+                    "-"
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="px-6 py-4 bg-slate-50 border-t border-slate-200">
+        <p className="text-sm text-slate-600">
+          Showing {sessions.length} {sessions.length === 1 ? "session" : "sessions"} (active only)
+        </p>
+      </div>
     </div>
   )
 }
