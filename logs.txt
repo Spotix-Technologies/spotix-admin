@@ -1,0 +1,8 @@
+.LOG
+12:01 PM 4/10/2026
+[v1.1.0]
+This is kind of the very first ever release of the admin system. Although it was been built before now. Now I fixed more functionalities
+
+## Chore ##
+- Enabled the apis to conform to the new pricing modal of Spotix
+- Created the event data section

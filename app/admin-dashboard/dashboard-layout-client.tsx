@@ -15,6 +15,7 @@ import {
   Wallet,
   UserPlus,
   Download,
+  Settings,
   LogOut,
   Loader2,
 } from "lucide-react"
@@ -55,6 +56,7 @@ const menuItems = [
   { id: "payouts", label: "Payouts", icon: Wallet, href: "/admin-dashboard/payouts", active: false },
   { id: "onboard", label: "Onboard", icon: UserPlus, href: "/admin-dashboard/onboard", active: false },
   { id: "export", label: "Export", icon: Download, href: "/admin-dashboard/export", active: false },
+  { id: "globals", label: "Globals", icon: Settings, href: "/admin-dashboard/globals", active: true },
 ]
 
 function getGreeting(): string {

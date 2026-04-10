@@ -16,28 +16,43 @@ export interface StatsData {
     ticketsSold: number
     totalRevenue: number
     usersSignedUp: number
+    totalTransactionFees: number
+    payout: number
+    payoutCount: number
   }
   previousYearly: {
     ticketsSold: number
     totalRevenue: number
     usersSignedUp: number
+    totalTransactionFees: number
+    payout: number
+    payoutCount: number
   }
   monthly: {
     current: {
       ticketsSold: number
       totalRevenue: number
       usersSignedUp: number
+      totalTransactionFees: number
+      payout: number
+      payoutCount: number
     }
     previous: {
       ticketsSold: number
       totalRevenue: number
       usersSignedUp: number
+      totalTransactionFees: number
+      payout: number
+      payoutCount: number
     }
     all: Array<{
       month: string
       ticketsSold?: number
       totalRevenue?: number
       usersSignedUp?: number
+      totalTransactionFees?: number
+      payout?: number
+      payoutCount?: number
     }>
   }
   daily: {
@@ -45,18 +60,27 @@ export interface StatsData {
       ticketsSold: number
       totalRevenue: number
       usersSignedUp: number
+      totalTransactionFees: number
+      payout: number
+      payoutCount: number
     }
     previousDays: Array<{
       day: string
       ticketsSold?: number
       totalRevenue?: number
       usersSignedUp?: number
+      totalTransactionFees?: number
+      payout?: number
+      payoutCount?: number
     }>
     all: Array<{
       day: string
       ticketsSold?: number
       totalRevenue?: number
       usersSignedUp?: number
+      totalTransactionFees?: number
+      payout?: number
+      payoutCount?: number
     }>
   }
 }

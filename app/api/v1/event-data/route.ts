@@ -1,189 +1,269 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { adminDb } from "@/lib/firebase-admin"
+import { FieldValue } from "firebase-admin/firestore"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
-interface EventDataResponse {
-  id: string
-  eventName: string
-  eventImage: string
-  ticketsSold: number
-  totalRevenue: number
-  ticketPrices: Array<{ policy: string; price: number }>
-  flagged?: boolean
+const DEV_TAG = "API developed and maintained by Spotix Technologies"
+
+/* ─────────────────────────────────────────────
+   Helper — extract admin identity from
+   middleware-injected headers (proxy.ts sets
+   x-user-uid, x-user-username, x-is-admin)
+───────────────────────────────────────────── */
+function getAdminFromHeaders(request: NextRequest): { uid: string; username: string } | null {
+  const isAdmin = request.headers.get("x-is-admin")
+  const uid = request.headers.get("x-user-uid")
+  const username =
+    request.headers.get("x-user-username") ||
+    request.headers.get("x-user-fullname") ||
+    "Unknown Admin"
+
+  if (isAdmin !== "true" || !uid) return null
+  return { uid, username }
 }
 
-interface UserEventSummary {
-  eventId: string
-  eventName: string
-  ticketsSold: number
-  totalRevenue: number
-}
-
-// GET all user IDs
+/* ─────────────────────────────────────────────
+   GET
+   ?action=search&term=       → suggestions (5+ chars)
+   ?action=getEventDetails&eventId=  → full doc
+───────────────────────────────────────────── */
 export async function GET(request: NextRequest) {
   try {
+    if (request.headers.get("x-is-admin") !== "true") {
+      return NextResponse.json({ error: "Forbidden: admin access required", developer: DEV_TAG }, { status: 403 })
+    }
+
     const { searchParams } = new URL(request.url)
     const action = searchParams.get("action")
-    const userId = searchParams.get("userId")
-    const eventId = searchParams.get("eventId")
 
-    // Action 1: Get all events for a specific user
-    if (action === "getUserEvents" && userId) {
-      const userEventsRef = adminDb.collection("events").doc(userId).collection("userEvents")
-      const eventsSnapshot = await userEventsRef.get()
+    /* SEARCH SUGGESTIONS */
+    if (action === "search") {
+      const term = searchParams.get("term")?.trim()
+      if (!term || term.length < 5) {
+        return NextResponse.json({ success: true, data: [] }, { status: 200 })
+      }
 
-      const events: UserEventSummary[] = []
+      const results: Array<{
+        eventId: string
+        eventName: string
+        eventImage: string
+        status: string
+        organizerId: string
+      }> = []
 
-      for (const eventDoc of eventsSnapshot.docs) {
-        const eventData = eventDoc.data()
-        
-        // Get attendees count
-        const attendeesSnapshot = await adminDb
-          .collection("events")
-          .doc(userId)
-          .collection("userEvents")
-          .doc(eventDoc.id)
-          .collection("attendees")
-          .get()
-
-        const ticketsSold = attendeesSnapshot.size
-
-        // Use totalRevenue from event document if available, otherwise calculate
-        let totalRevenue = eventData.totalRevenue || 0
-
-        events.push({
-          eventId: eventDoc.id,
-          eventName: eventData.eventName || "Untitled Event",
-          ticketsSold,
-          totalRevenue,
+      // Exact eventId lookup
+      const byId = await adminDb.collection("events").doc(term).get()
+      if (byId.exists) {
+        const d = byId.data()!
+        results.push({
+          eventId: byId.id,
+          eventName: d.eventName || "Untitled",
+          eventImage: d.eventImage || "",
+          status: d.status || "active",
+          organizerId: d.organizerId || "",
         })
       }
 
-      return NextResponse.json(
-        {
-          success: true,
-          data: events,
-          developer: "API developed and maintained by Spotix Technologies",
-        },
-        { status: 200 },
-      )
-    }
+      // Name prefix query
+      const nameSnap = await adminDb
+        .collection("events")
+        .orderBy("eventName")
+        .startAt(term)
+        .endAt(term + "\uf8ff")
+        .limit(8)
+        .get()
 
-    // Action 2: Get specific event details
-    if (action === "getEventDetails" && userId && eventId) {
-      const eventRef = adminDb.collection("events").doc(userId).collection("userEvents").doc(eventId)
-      const eventDoc = await eventRef.get()
-
-      if (!eventDoc.exists) {
-        return NextResponse.json(
-          {
-            error: "Event not found",
-            developer: "API developed and maintained by Spotix Technologies",
-          },
-          { status: 404 },
-        )
+      for (const doc of nameSnap.docs) {
+        if (results.find((r) => r.eventId === doc.id)) continue
+        const d = doc.data()
+        results.push({
+          eventId: doc.id,
+          eventName: d.eventName || "Untitled",
+          eventImage: d.eventImage || "",
+          status: d.status || "active",
+          organizerId: d.organizerId || "",
+        })
       }
 
-      const eventData = eventDoc.data()
+      return NextResponse.json({ success: true, data: results.slice(0, 8), developer: DEV_TAG }, { status: 200 })
+    }
 
-      // Get attendees
-      const attendeesRef = adminDb
+    /* EVENT DETAILS */
+    if (action === "getEventDetails") {
+      const eventId = searchParams.get("eventId")
+      if (!eventId) {
+        return NextResponse.json({ error: "eventId required", developer: DEV_TAG }, { status: 400 })
+      }
+
+      const eventDoc = await adminDb.collection("events").doc(eventId).get()
+      if (!eventDoc.exists) {
+        return NextResponse.json({ error: "Event not found", developer: DEV_TAG }, { status: 404 })
+      }
+
+      const d = eventDoc.data()!
+      const attendeesSnap = await adminDb
         .collection("events")
-        .doc(userId)
-        .collection("userEvents")
         .doc(eventId)
         .collection("attendees")
-      const attendeesSnapshot = await attendeesRef.get()
-      const ticketsSold = attendeesSnapshot.size
+        .get()
 
-      // Use totalRevenue from event document if available
-      const totalRevenue = eventData?.totalRevenue || 0
-
-      const responseData: EventDataResponse = {
-        id: eventId,
-        eventName: eventData?.eventName || "",
-        eventImage: eventData?.eventImage || "",
-        ticketsSold: ticketsSold,
-        totalRevenue: totalRevenue,
-        ticketPrices: eventData?.ticketPrices || [],
-        flagged: eventData?.flagged || false,
-      }
-
-      return NextResponse.json(
-        {
-          success: true,
-          data: responseData,
-          developer: "API developed and maintained by Spotix Technologies",
+      return NextResponse.json({
+        success: true,
+        data: {
+          id: eventId,
+          eventName: d.eventName || "",
+          eventDescription: d.eventDescription || "",
+          eventImage: d.eventImage || "",
+          eventImages: d.eventImages || [],
+          eventDate: d.eventDate || "",
+          eventEndDate: d.eventEndDate || "",
+          eventStart: d.eventStart || "",
+          eventEnd: d.eventEnd || "",
+          eventVenue: d.eventVenue || "",
+          venueCoordinates: d.venueCoordinates || null,
+          eventType: d.eventType || "",
+          isFree: d.isFree ?? false,
+          ticketPrices: d.ticketPrices || [],
+          ticketsSold: d.ticketsSold ?? attendeesSnap.size,
+          revenue: d.revenue ?? 0,
+          totalRevenue: d.totalRevenue ?? 0,
+          paidAmount: d.paidAmount ?? 0,
+          totalPaidOut: d.totalPaidOut ?? 0,
+          likeCount: d.likeCount ?? 0,
+          status: d.status || "active",
+          flagged: d.flagged ?? false,
+          suspended: d.suspended ?? false,
+          organizerId: d.organizerId || "",
+          affiliateId: d.affiliateId || null,
+          affiliateName: d.affiliateName || null,
+          allowAgents: d.allowAgents ?? false,
+          enabledCollaboration: d.enabledCollaboration ?? false,
+          hasStopDate: d.hasStopDate ?? false,
+          stopDate: d.stopDate || null,
+          createdAt: d.createdAt?.toDate?.()?.toISOString() || null,
+          updatedAt: d.updatedAt?.toDate?.()?.toISOString() || null,
+          attendeeCount: attendeesSnap.size,
         },
-        { status: 200 },
-      )
+        developer: DEV_TAG,
+      }, { status: 200 })
     }
 
-    return NextResponse.json(
-      {
-        error: "Invalid action or missing parameters",
-        developer: "API developed and maintained by Spotix Technologies",
-      },
-      { status: 400 },
-    )
+    return NextResponse.json({ error: "Invalid action or missing parameters", developer: DEV_TAG }, { status: 400 })
   } catch (error) {
-    console.error("Error fetching data:", error)
-
+    console.error("GET /api/v1/event-data error:", error)
     return NextResponse.json(
-      {
-        error: "Internal Server Error",
-        message: "Failed to fetch data",
-        details: error instanceof Error ? error.message : "Unknown error",
-        developer: "API developed and maintained by Spotix Technologies",
-      },
+      { error: "Internal Server Error", details: error instanceof Error ? error.message : "Unknown", developer: DEV_TAG },
       { status: 500 },
     )
   }
 }
 
-// POST to update event flagged status
-export async function POST(request: NextRequest) {
+/* ─────────────────────────────────────────────
+   PATCH — flag | setStatus | suspend
+   Body: { eventId, action, reason, ...payload }
+───────────────────────────────────────────── */
+export async function PATCH(request: NextRequest) {
   try {
-    const body = await request.json()
-    const { userId, eventId, flagged } = body
-
-    if (!userId || !eventId || typeof flagged !== "boolean") {
-      return NextResponse.json(
-        {
-          error: "Missing or invalid userId/eventId/flagged parameters",
-          developer: "API developed and maintained by Spotix Technologies",
-        },
-        { status: 400 },
-      )
+    const admin = getAdminFromHeaders(request)
+    if (!admin) {
+      return NextResponse.json({ error: "Forbidden: admin access required", developer: DEV_TAG }, { status: 403 })
     }
 
-    const eventRef = adminDb.collection("events").doc(userId).collection("userEvents").doc(eventId)
-    await eventRef.update({
-      flagged: flagged,
-      updatedAt: new Date(),
+    const body = await request.json()
+    const { eventId, action, reason } = body
+
+    if (!eventId || !action) {
+      return NextResponse.json({ error: "eventId and action are required", developer: DEV_TAG }, { status: 400 })
+    }
+    if (!reason?.trim()) {
+      return NextResponse.json({ error: "A reason is required for all admin actions", developer: DEV_TAG }, { status: 400 })
+    }
+
+    const eventRef = adminDb.collection("events").doc(eventId)
+    if (!(await eventRef.get()).exists) {
+      return NextResponse.json({ error: "Event not found", developer: DEV_TAG }, { status: 404 })
+    }
+
+    const auditEntry = {
+      adminUid: admin.uid,
+      adminUsername: admin.username,
+      reason,
+      timestamp: new Date().toISOString(),
+      action,
+    }
+
+    if (action === "flag") {
+      const { flagged } = body
+      if (typeof flagged !== "boolean") {
+        return NextResponse.json({ error: "flagged (boolean) required", developer: DEV_TAG }, { status: 400 })
+      }
+      await eventRef.update({ flagged, updatedAt: new Date(), flagAudit: FieldValue.arrayUnion({ ...auditEntry, flagged }) })
+      return NextResponse.json({ success: true, message: `Event ${flagged ? "flagged" : "unflagged"}`, developer: DEV_TAG }, { status: 200 })
+    }
+
+    if (action === "setStatus") {
+      const { status } = body
+      if (!["active", "inactive"].includes(status)) {
+        return NextResponse.json({ error: "status must be 'active' or 'inactive'", developer: DEV_TAG }, { status: 400 })
+      }
+      await eventRef.update({ status, updatedAt: new Date(), statusAudit: FieldValue.arrayUnion({ ...auditEntry, status }) })
+      return NextResponse.json({ success: true, message: `Event set to ${status}`, developer: DEV_TAG }, { status: 200 })
+    }
+
+    if (action === "suspend") {
+      const { suspended } = body
+      if (typeof suspended !== "boolean") {
+        return NextResponse.json({ error: "suspended (boolean) required", developer: DEV_TAG }, { status: 400 })
+      }
+      await eventRef.update({ suspended, updatedAt: new Date(), suspendAudit: FieldValue.arrayUnion({ ...auditEntry, suspended }) })
+      return NextResponse.json({ success: true, message: `Event ${suspended ? "suspended" : "unsuspended"}`, developer: DEV_TAG }, { status: 200 })
+    }
+
+    return NextResponse.json({ error: "Unknown action", developer: DEV_TAG }, { status: 400 })
+  } catch (error) {
+    console.error("PATCH /api/v1/event-data error:", error)
+    return NextResponse.json({ error: "Internal Server Error", developer: DEV_TAG }, { status: 500 })
+  }
+}
+
+/* ─────────────────────────────────────────────
+   DELETE — soft-delete → deletedEvents/
+   Body: { eventId, reason }
+───────────────────────────────────────────── */
+export async function DELETE(request: NextRequest) {
+  try {
+    const admin = getAdminFromHeaders(request)
+    if (!admin) {
+      return NextResponse.json({ error: "Forbidden: admin access required", developer: DEV_TAG }, { status: 403 })
+    }
+
+    const body = await request.json()
+    const { eventId, reason } = body
+
+    if (!eventId) return NextResponse.json({ error: "eventId required", developer: DEV_TAG }, { status: 400 })
+    if (!reason?.trim()) return NextResponse.json({ error: "A reason is required for deletion", developer: DEV_TAG }, { status: 400 })
+
+    const eventRef = adminDb.collection("events").doc(eventId)
+    const eventDoc = await eventRef.get()
+    if (!eventDoc.exists) {
+      return NextResponse.json({ error: "Event not found", developer: DEV_TAG }, { status: 404 })
+    }
+
+    await adminDb.collection("deletedEvents").doc(eventId).set({
+      ...eventDoc.data()!,
+      deletedAt: new Date().toISOString(),
+      deletedBy: { adminUid: admin.uid, adminUsername: admin.username },
+      deletionReason: reason,
+      originalEventId: eventId,
     })
 
-    return NextResponse.json(
-      {
-        success: true,
-        message: `Event ${flagged ? "flagged" : "unflagged"} successfully`,
-        developer: "API developed and maintained by Spotix Technologies",
-      },
-      { status: 200 },
-    )
-  } catch (error) {
-    console.error("Error updating event flagged status:", error)
+    await eventRef.delete()
 
-    return NextResponse.json(
-      {
-        error: "Internal Server Error",
-        message: "Failed to update event data",
-        details: error instanceof Error ? error.message : "Unknown error",
-        developer: "API developed and maintained by Spotix Technologies",
-      },
-      { status: 500 },
-    )
+    return NextResponse.json({ success: true, message: "Event moved to deletedEvents", developer: DEV_TAG }, { status: 200 })
+  } catch (error) {
+    console.error("DELETE /api/v1/event-data error:", error)
+    return NextResponse.json({ error: "Internal Server Error", developer: DEV_TAG }, { status: 500 })
   }
 }

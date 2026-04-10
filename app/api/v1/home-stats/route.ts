@@ -8,6 +8,9 @@ interface AnalyticsData {
   ticketsSold?: number
   totalRevenue?: number
   usersSignedUp?: number
+  totalTransactionFees?: number
+  payout?: number
+  payoutCount?: number
   lastUpdated?: any
 }
 
@@ -123,6 +126,9 @@ export async function GET(request: NextRequest) {
           ticketsSold: 0,
           totalRevenue: 0,
           usersSignedUp: 0,
+          totalTransactionFees: 0,
+          payout: 0,
+          payoutCount: 0,
         })
       }
     }
@@ -140,22 +146,34 @@ export async function GET(request: NextRequest) {
             ticketsSold: yearlyData.ticketsSold || 0,
             totalRevenue: yearlyData.totalRevenue || 0,
             usersSignedUp: yearlyData.usersSignedUp || 0,
+            totalTransactionFees: yearlyData.totalTransactionFees || 0,
+            payout: yearlyData.payout || 0,
+            payoutCount: yearlyData.payoutCount || 0,
           },
           previousYearly: {
             ticketsSold: prevYearlyData.ticketsSold || 0,
             totalRevenue: prevYearlyData.totalRevenue || 0,
             usersSignedUp: prevYearlyData.usersSignedUp || 0,
+            totalTransactionFees: prevYearlyData.totalTransactionFees || 0,
+            payout: prevYearlyData.payout || 0,
+            payoutCount: prevYearlyData.payoutCount || 0,
           },
           monthly: {
             current: {
               ticketsSold: currentMonthData.ticketsSold || 0,
               totalRevenue: currentMonthData.totalRevenue || 0,
               usersSignedUp: currentMonthData.usersSignedUp || 0,
+              totalTransactionFees: currentMonthData.totalTransactionFees || 0,
+              payout: currentMonthData.payout || 0,
+              payoutCount: currentMonthData.payoutCount || 0,
             },
             previous: {
               ticketsSold: prevMonthData.ticketsSold || 0,
               totalRevenue: prevMonthData.totalRevenue || 0,
               usersSignedUp: prevMonthData.usersSignedUp || 0,
+              totalTransactionFees: prevMonthData.totalTransactionFees || 0,
+              payout: prevMonthData.payout || 0,
+              payoutCount: prevMonthData.payoutCount || 0,
             },
             all: monthlyData,
           },
@@ -164,6 +182,9 @@ export async function GET(request: NextRequest) {
               ticketsSold: todayData.ticketsSold || 0,
               totalRevenue: todayData.totalRevenue || 0,
               usersSignedUp: todayData.usersSignedUp || 0,
+              totalTransactionFees: todayData.totalTransactionFees || 0,
+              payout: todayData.payout || 0,
+              payoutCount: todayData.payoutCount || 0,
             },
             previousDays: previousDaysData,
             all: dailyData,
