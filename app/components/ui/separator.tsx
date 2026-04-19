@@ -1,3 +1,5 @@
+// app/components/ui/separator.tsx
+
 import * as React from "react"
 
 interface SeparatorProps {

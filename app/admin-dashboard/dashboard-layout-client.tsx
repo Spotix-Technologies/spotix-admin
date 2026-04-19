@@ -1,3 +1,5 @@
+// app/admin-dashboard/dashboard-layout-client.tsx
+
 "use client"
 
 import type React from "react"

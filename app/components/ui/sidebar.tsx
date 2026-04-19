@@ -1,3 +1,5 @@
+// app/components/ui/sidebar.tsx
+
 import * as React from "react"
 import { Menu } from "lucide-react"
 
@@ -25,7 +27,7 @@ export function SidebarProvider({ children, defaultOpen = true }: SidebarProvide
 
   return (
     <SidebarContext.Provider value={{ open, setOpen }}>
-      <div className="flex h-screen w-full overflow-hidden">
+      <div className="flex h-[100dvh] w-full overflow-hidden">
         {/* Mobile backdrop */}
         {open && (
           <div
@@ -54,7 +56,7 @@ export const Sidebar = React.forwardRef<HTMLDivElement, SidebarProps>(
         ref={ref}
         className={`
           bg-white transition-all duration-300 ease-in-out
-          fixed left-0 top-0 h-screen z-40
+          fixed left-0 top-0 h-[100dvh] z-40
           ${open ? "w-64" : "w-0 overflow-hidden"}
           lg:relative lg:w-64
           ${className}
@@ -156,7 +158,7 @@ SidebarMenuButton.displayName = "SidebarMenuButton"
 export const SidebarInset = React.forwardRef<HTMLDivElement, SidebarProps>(
   ({ children, className = "" }, ref) => {
     return (
-      <div ref={ref} className={`flex flex-col flex-1 min-w-0 h-screen overflow-hidden ${className}`}>
+      <div ref={ref} className={`flex flex-col flex-1 min-w-0 h-[100dvh] overflow-hidden ${className}`}>
         {children}
       </div>
     )

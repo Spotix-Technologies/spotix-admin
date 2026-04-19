@@ -1,3 +1,6 @@
+// api/v1/event-data/deleted/route.ts
+
+
 import { type NextRequest, NextResponse } from "next/server"
 import { adminDb } from "@/lib/firebase-admin"
 import { verifyAdminAccess } from "@/lib/verify-admin"

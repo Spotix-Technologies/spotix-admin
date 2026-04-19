@@ -8,6 +8,8 @@ export const dynamic = "force-dynamic"
 
 const DEV_TAG = "API developed and maintained by Spotix Technologies"
 
+
+
 /* ─────────────────────────────────────────────
    GET
    ?action=search&term=       → suggestions (5+ chars)
@@ -23,8 +25,31 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: json.error || "Forbidden: admin access required", developer: DEV_TAG }, { status: response.status })
     }
 
+    
+
     const { searchParams } = new URL(request.url)
     const action = searchParams.get("action")
+
+    if (action === "listRecent") {
+  const snap = await adminDb
+    .collection("events")
+    .orderBy("createdAt", "desc")
+    .limit(10)
+    .get()
+
+  const results = snap.docs.map((doc) => {
+    const d = doc.data()
+    return {
+      eventId: doc.id,
+      eventName: d.eventName || "Untitled",
+      eventImage: d.eventImage || "",
+      status: d.status || "active",
+      organizerId: d.organizerId || "",
+    }
+  })
+
+  return NextResponse.json({ success: true, data: results, developer: DEV_TAG }, { status: 200 })
+}
 
     /* SEARCH SUGGESTIONS */
     if (action === "search") {

@@ -1,0 +1,1 @@
+The rule going forward: Any page component that renders inside DashboardLayoutClient should never use min-h-screen, h-screen, or set its own bg- background at the root. The layout already owns the full-height container and background (bg-gray-50). Page content just needs to flow naturally inside <main>.

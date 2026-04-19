@@ -3,7 +3,7 @@ import { EventDataClient } from "./event-data-client"
 
 export default function EventDataPage() {
   return (
-    <Suspense fallback={<div className="flex items-center justify-center h-screen">Loading...</div>}>
+    <Suspense fallback={<div className="flex items-center justify-center py-24">Loading...</div>}>
       <EventDataClient />
     </Suspense>
   )

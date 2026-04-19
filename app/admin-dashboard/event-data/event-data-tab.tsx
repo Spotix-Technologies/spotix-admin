@@ -86,10 +86,10 @@ function StatCard({ label, value, icon: Icon, accent }: { label: string; value: 
 }
 
 function ActionModal({
-  open, onClose, title, description, warning, onConfirm, confirmLabel, danger, children, loading,
+  open, onClose, title, description, warning, onConfirm, confirmLabel, danger, children, loading, confirmDisabled,
 }: {
   open: boolean; onClose: () => void; title: string; description: string; warning?: string
-  onConfirm: () => void; confirmLabel: string; danger?: boolean; children?: React.ReactNode; loading?: boolean
+  onConfirm: () => void; confirmLabel: string; danger?: boolean; children?: React.ReactNode; loading?: boolean; confirmDisabled?: boolean
 }) {
   if (!open) return null
   return (
@@ -122,8 +122,8 @@ function ActionModal({
           </button>
           <button
             onClick={onConfirm}
-            disabled={loading}
-            className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors disabled:opacity-50 ${danger ? "bg-red-600 hover:bg-red-700 text-white" : "bg-violet-600 hover:bg-violet-700 text-white"}`}
+            disabled={loading || confirmDisabled}
+            className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${danger ? "bg-red-600 hover:bg-red-700 text-white" : "bg-violet-600 hover:bg-violet-700 text-white"}`}
           >
             {loading ? "Processing…" : confirmLabel}
           </button>
@@ -569,6 +569,7 @@ export default function EventDataTab({ eventData, onUpdate, onDeleted }: Props) 
         warning="This affects all attendees, affiliates, and collaborators. Event data is preserved in deletedEvents and can be restored."
         onConfirm={handleDeleteConfirm}
         confirmLabel="Delete Event"
+        confirmDisabled={deleteConfirmText !== event.eventName || !deleteReason.trim()}
         danger
         loading={saving === "delete"}
       >
