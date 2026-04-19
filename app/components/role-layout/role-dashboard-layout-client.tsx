@@ -1,16 +1,11 @@
-// app/admin-dashboard/dashboard-layout-client.tsx
+// Shared layout for all non-admin role dashboards
 "use client"
 
 import type React from "react"
 import { useState } from "react"
 import { useRouter, usePathname } from "next/navigation"
 import Image from "next/image"
-import {
-  Home, Archive, CalendarDays, FileText, Vote,
-  ShoppingBag, Wallet, Users, UserPlus, Download,
-  Settings, LogOut, Loader2, ClipboardList,
-  SwitchCamera,
-} from "lucide-react"
+import { ClipboardList, LogOut, Loader2, SwitchCamera } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   Sidebar, SidebarContent, SidebarFooter, SidebarHeader,
@@ -19,7 +14,7 @@ import {
 } from "@/components/ui/sidebar"
 import { Separator } from "@/components/ui/separator"
 
-interface User {
+export interface RoleUser {
   uid: string
   username: string
   fullName: string
@@ -28,31 +23,11 @@ interface User {
   secondaryRoles: string[]
 }
 
-interface DashboardLayoutClientProps {
-  user: User
+interface RoleDashboardLayoutClientProps {
+  user: RoleUser
   children: React.ReactNode
-}
-
-const menuItems = [
-  { id: "home",       label: "Home",       icon: Home,          href: "/admin-dashboard",            active: true  },
-  { id: "archive",    label: "Archive",    icon: Archive,       href: "/admin-dashboard/archive",    active: false },
-  { id: "event-data", label: "Event Data", icon: CalendarDays,  href: "/admin-dashboard/event-data", active: true  },
-  { id: "users",      label: "Users",      icon: Users,         href: "/admin-dashboard/users",      active: true  },
-  { id: "tasks",      label: "Tasks",      icon: ClipboardList, href: "/admin-dashboard/tasks",      active: true  },
-  { id: "reports",    label: "Reports",    icon: FileText,      href: "/admin-dashboard/reports",    active: false },
-  { id: "votes",      label: "Votes",      icon: Vote,          href: "/admin-dashboard/votes",      active: false },
-  { id: "merch",      label: "Merch",      icon: ShoppingBag,   href: "/admin-dashboard/merch",      active: false },
-  { id: "payouts",    label: "Payouts",    icon: Wallet,        href: "/admin-dashboard/payouts",    active: false },
-  { id: "onboard",    label: "Onboard",    icon: UserPlus,      href: "/admin-dashboard/onboard",    active: true  },
-  { id: "export",     label: "Export",     icon: Download,      href: "/admin-dashboard/export",     active: false },
-  { id: "globals",    label: "Globals",    icon: Settings,      href: "/admin-dashboard/globals",    active: true  },
-]
-
-const ROLE_DASHBOARD: Record<string, string> = {
-  "exec-assistant":    "/exec-assistant-dashboard",
-  "customer-support":  "/customer-support-dashboard",
-  "marketing":         "/marketing-dashboard",
-  "IT":                "/it-dashboard",
+  dashboardLabel: string
+  basePath: string
 }
 
 const ROLE_LABEL: Record<string, string> = {
@@ -63,6 +38,14 @@ const ROLE_LABEL: Record<string, string> = {
   IT:                 "IT",
 }
 
+const ROLE_DASHBOARD: Record<string, string> = {
+  admin:              "/admin-dashboard",
+  "exec-assistant":   "/exec-assistant-dashboard",
+  "customer-support": "/customer-support-dashboard",
+  marketing:          "/marketing-dashboard",
+  IT:                 "/it-dashboard",
+}
+
 function getGreeting(): string {
   const h = new Date().getHours()
   if (h < 12) return "Good morning"
@@ -70,13 +53,16 @@ function getGreeting(): string {
   return "Good evening"
 }
 
-export function DashboardLayoutClient({ user, children }: DashboardLayoutClientProps) {
-  const router = useRouter()
+export function RoleDashboardLayoutClient({
+  user, children, dashboardLabel, basePath,
+}: RoleDashboardLayoutClientProps) {
+  const router   = useRouter()
   const pathname = usePathname()
-  const [loggingOut, setLoggingOut] = useState(false)
+  const [loggingOut,    setLoggingOut]    = useState(false)
   const [switchingRole, setSwitchingRole] = useState(false)
 
-  const switchableRoles = user.secondaryRoles.filter((r) => r !== "admin")
+  // All roles this user can switch to (secondary roles that have a dashboard)
+  const switchableRoles = user.secondaryRoles.filter((r) => ROLE_DASHBOARD[r])
 
   const handleLogout = async () => {
     setLoggingOut(true)
@@ -90,12 +76,11 @@ export function DashboardLayoutClient({ user, children }: DashboardLayoutClientP
 
   const handleSwitchRole = async (targetRole: string) => {
     setSwitchingRole(true)
-    setShowSwitch(false)
     try {
       const res = await fetch("/api/v1/switch-role", {
-        method: "POST",
+        method:  "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ targetRole }),
+        body:    JSON.stringify({ targetRole }),
       })
       if (res.ok) {
         const dest = ROLE_DASHBOARD[targetRole]
@@ -106,10 +91,9 @@ export function DashboardLayoutClient({ user, children }: DashboardLayoutClientP
     }
   }
 
-  const isCurrentPage = (href: string) => {
-    if (href === "/admin-dashboard") return pathname === "/admin-dashboard"
-    return pathname.startsWith(href)
-  }
+  const tasksHref = `${basePath}/tasks`
+  const isCurrentPage = (href: string) =>
+    href === basePath ? pathname === basePath : pathname.startsWith(href)
 
   return (
     <SidebarProvider>
@@ -120,35 +104,29 @@ export function DashboardLayoutClient({ user, children }: DashboardLayoutClientP
               <span className="text-white font-bold text-base md:text-lg">S</span>
             </div>
             <div className="min-w-0">
-              <h2 className="font-semibold text-gray-900 text-sm md:text-base truncate">Spotix Admin</h2>
-              <p className="text-[10px] md:text-xs text-gray-500 truncate">Management Portal</p>
+              <h2 className="font-semibold text-gray-900 text-sm md:text-base truncate">Spotix</h2>
+              <p className="text-[10px] md:text-xs text-gray-500 truncate">{dashboardLabel}</p>
             </div>
           </div>
         </SidebarHeader>
+
         <Separator />
+
         <SidebarContent className="p-1.5 md:p-2">
           <SidebarMenu>
-            {menuItems.map((item) => (
-              <SidebarMenuItem key={item.id}>
-                <SidebarMenuButton
-                  onClick={() => item.active && router.push(item.href)}
-                  isActive={isCurrentPage(item.href)}
-                  className={`w-full justify-start text-sm ${!item.active ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
-                  tooltip={!item.active ? "Coming soon" : item.label}
-                >
-                  <item.icon className={`w-4 h-4 flex-shrink-0 ${isCurrentPage(item.href) ? "text-[#6b2fa5]" : ""}`} />
-                  <span className="truncate">{item.label}</span>
-                  {!item.active && (
-                    <span className="ml-auto text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded flex-shrink-0">
-                      Soon
-                    </span>
-                  )}
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            ))}
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                onClick={() => router.push(tasksHref)}
+                isActive={isCurrentPage(tasksHref)}
+                className="w-full justify-start text-sm cursor-pointer"
+              >
+                <ClipboardList className={`w-4 h-4 flex-shrink-0 ${isCurrentPage(tasksHref) ? "text-[#6b2fa5]" : ""}`} />
+                <span className="truncate">Tasks</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
           </SidebarMenu>
 
-          {/* Switch Role section */}
+          {/* Switch role section */}
           {switchableRoles.length > 0 && (
             <div className="mt-4 px-1">
               <Separator className="mb-3" />
@@ -167,7 +145,9 @@ export function DashboardLayoutClient({ user, children }: DashboardLayoutClientP
             </div>
           )}
         </SidebarContent>
+
         <Separator />
+
         <SidebarFooter className="p-3 md:p-4">
           <div className="flex items-center gap-2 md:gap-3 mb-2 md:mb-3">
             <div className="w-8 h-8 md:w-10 md:h-10 rounded-full overflow-hidden border-2 border-[#6b2fa5] flex-shrink-0">
@@ -179,7 +159,7 @@ export function DashboardLayoutClient({ user, children }: DashboardLayoutClientP
             </div>
             <div className="flex-1 min-w-0">
               <p className="font-medium text-xs md:text-sm text-gray-900 truncate">{user.username}</p>
-              <p className="text-[10px] md:text-xs text-gray-500 truncate">{ROLE_LABEL[user.role] ?? "Admin"}</p>
+              <p className="text-[10px] md:text-xs text-gray-500 truncate">{ROLE_LABEL[user.role] ?? user.role}</p>
             </div>
           </div>
           <Button
@@ -189,16 +169,15 @@ export function DashboardLayoutClient({ user, children }: DashboardLayoutClientP
             className="w-full border-[#6b2fa5] text-[#6b2fa5] hover:bg-[#6b2fa5] hover:text-white bg-transparent text-xs md:text-sm"
             size="sm"
           >
-            {loggingOut ? (
-              <><Loader2 className="w-3 h-3 mr-1.5 animate-spin" /><span>Logging out...</span></>
-            ) : (
-              <><LogOut className="w-3 h-3 mr-1.5" /><span>Logout</span></>
-            )}
+            {loggingOut
+              ? <><Loader2 className="w-3 h-3 mr-1.5 animate-spin" /><span>Logging out…</span></>
+              : <><LogOut className="w-3 h-3 mr-1.5" /><span>Logout</span></>
+            }
           </Button>
         </SidebarFooter>
       </Sidebar>
 
-      {/* SidebarInset: flex-1, no h-screen — parent SidebarProvider owns height */}
+      {/* No h-screen here — SidebarProvider owns the height */}
       <SidebarInset>
         <header className="bg-white border-b border-gray-200 px-3 md:px-4 py-2 md:py-3 flex items-center gap-2 md:gap-4 flex-shrink-0">
           <SidebarTrigger className="-ml-1" />
@@ -207,10 +186,9 @@ export function DashboardLayoutClient({ user, children }: DashboardLayoutClientP
             <h1 className="text-sm md:text-lg font-semibold text-gray-900 truncate">
               {getGreeting()}, {user.username}
             </h1>
-            <p className="text-xs md:text-sm text-gray-500 truncate hidden sm:block">Welcome to Spotix Admin Portal</p>
+            <p className="text-xs md:text-sm text-gray-500 truncate hidden sm:block">{dashboardLabel}</p>
           </div>
         </header>
-        {/* flex-1 + overflow-y-auto: this is the scrollable content area */}
         <main className="flex-1 overflow-y-auto p-3 md:p-4 lg:p-6 bg-gray-50 pb-8">
           {children}
         </main>
@@ -218,7 +196,3 @@ export function DashboardLayoutClient({ user, children }: DashboardLayoutClientP
     </SidebarProvider>
   )
 }
-function setShowSwitch(arg0: boolean) {
-  throw new Error("Function not implemented.")
-}
-

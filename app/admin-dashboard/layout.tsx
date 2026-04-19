@@ -14,43 +14,51 @@ async function getUserData() {
   const cookieStore = await cookies()
   const sessionCookie = cookieStore.get("spotix_session")?.value
 
-  if (!sessionCookie) {
-    redirect("/login")
-  }
+  if (!sessionCookie) redirect("/login")
 
   try {
     const decodedClaims = await adminAuth.verifySessionCookie(sessionCookie, true)
     const uid = decodedClaims.uid
 
-    // Fetch user data
-    const userDoc = await adminDb.collection("users").doc(uid).get()
-    const userData = userDoc.data()
+    const [userDoc, adminDoc] = await Promise.all([
+      adminDb.collection("users").doc(uid).get(),
+      adminDb.collection("admins").doc(uid).get(),
+    ])
 
-    // Check admin status
-    const adminDoc = await adminDb.collection("admins").doc(uid).get()
-    const isAdmin = adminDoc.exists && adminDoc.data()?.role === "admin"
+    if (!adminDoc.exists) redirect("/unauth")
 
-    if (!isAdmin) {
+    const adminData = adminDoc.data()
+    const role: string = adminData?.role ?? ""
+    const secondaryRoles: string[] = adminData?.secondaryRoles ?? []
+
+    // Only the primary "admin" role may enter /admin-dashboard
+    if (role !== "admin") {
+      const ROLE_REDIRECT: Record<string, string> = {
+        "exec-assistant":   "/exec-assistant-dashboard",
+        "customer-support": "/customer-support-dashboard",
+        "marketing":        "/marketing-dashboard",
+        "IT":               "/it-dashboard",
+      }
+      const dest = ROLE_REDIRECT[role]
+      if (dest) redirect(dest)
       redirect("/unauth")
     }
 
+    const userData = userDoc.data()
     return {
       uid,
-      username: userData?.username || "Admin",
-      fullName: userData?.fullName || "",
+      username:       userData?.username      || "Admin",
+      fullName:       userData?.fullName       || "",
       profilePicture: userData?.profilePicture || null,
+      role,
+      secondaryRoles,
     }
   } catch {
     redirect("/login")
   }
 }
 
-export default async function AdminDashboardLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
+export default async function AdminDashboardLayout({ children }: { children: React.ReactNode }) {
   const user = await getUserData()
-
   return <DashboardLayoutClient user={user}>{children}</DashboardLayoutClient>
 }
