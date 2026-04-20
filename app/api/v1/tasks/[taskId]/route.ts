@@ -39,7 +39,7 @@ export async function GET(
 
     // Check access
     if (auth.role !== "admin") {
-      const allRoles = [auth.role, ...auth.secondaryRoles]
+      const allRoles: string[] = [auth.role, ...auth.secondaryRoles]
       const allowed =
         data.type === "general" ||
         (data.departments || []).some((d: string) => allRoles.includes(d))
