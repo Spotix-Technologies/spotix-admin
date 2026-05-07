@@ -38,9 +38,7 @@ function ExportDialog({
   const [mode, setMode] = useState<"guests" | "csv" | null>(null)
   const [includePurchaseCount, setIncludePurchaseCount] = useState(false)
 
-  if (!open) return null
-
-  // Build purchase count map: email → count
+  // Build purchase count map: email → count (must be before any early return)
   const purchaseCountMap = useMemo(() => {
     const map: Record<string, number> = {}
     for (const a of attendees) {
@@ -49,6 +47,8 @@ function ExportDialog({
     }
     return map
   }, [attendees])
+
+  if (!open) return null
 
   const handleGuestsDownload = () => {
     const exportData = attendees.map((a) => ({

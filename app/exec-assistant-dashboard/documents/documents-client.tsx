@@ -67,9 +67,20 @@ function fmtSize(bytes: number) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
-function fmtDate(iso: string) {
-  try { return new Date(iso).toLocaleDateString("en-NG", { day: "numeric", month: "short", year: "numeric" }) }
-  catch { return iso }
+function fmtDate(val: unknown): string {
+  try {
+    // Firestore Timestamp: { seconds: number, nanoseconds: number }
+    if (val && typeof val === "object" && "seconds" in (val as object)) {
+      const ts = val as { seconds: number }
+      return new Date(ts.seconds * 1000).toLocaleDateString("en-NG", { day: "numeric", month: "short", year: "numeric" })
+    }
+    // ISO string or anything new Date() can parse
+    const d = new Date(val as string)
+    if (Number.isNaN(d.getTime())) return "—"
+    return d.toLocaleDateString("en-NG", { day: "numeric", month: "short", year: "numeric" })
+  } catch {
+    return "—"
+  }
 }
 
 function stampToDisplay(s: string) {
