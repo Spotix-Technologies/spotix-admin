@@ -1,7 +1,7 @@
 import { cookies } from "next/headers"
 import { redirect } from "next/navigation"
 import { adminAuth, adminDb } from "@/lib/firebase-admin"
-import DocumentsClient from "../../../exec-assistant-dashboard/documents/documents-client"
+import DocumentsClient from "@/exec-assistant-dashboard/documents/documents-client"
 
 export const metadata = { title: "Documents | Admin" }
 
