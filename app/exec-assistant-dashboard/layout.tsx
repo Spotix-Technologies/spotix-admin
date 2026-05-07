@@ -8,7 +8,14 @@ export const metadata: Metadata = { title: "Exec Assistant Dashboard | Spotix" }
 export default async function Layout({ children }: { children: React.ReactNode }) {
   const user = await getRoleUser("exec-assistant")
   return (
-    <RoleDashboardLayoutClient user={user} dashboardLabel="Exec Assistant Dashboard" basePath="/exec-assistant-dashboard">
+    <RoleDashboardLayoutClient
+      user={user}
+      dashboardLabel="Exec Assistant Dashboard"
+      basePath="/exec-assistant-dashboard"
+      extraNavItems={[
+        { label: "Documents", href: "/exec-assistant-dashboard/documents", iconName: "FolderOpen" },
+      ]}
+    >
       {children}
     </RoleDashboardLayoutClient>
   )

@@ -9,7 +9,7 @@ import {
   Home, Archive, CalendarDays, FileText, Vote,
   ShoppingBag, Wallet, Users, UserPlus, Download,
   Settings, LogOut, Loader2, ClipboardList,
-  SwitchCamera,
+  SwitchCamera, FolderOpen,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -46,6 +46,7 @@ const menuItems = [
   { id: "onboard",    label: "Onboard",    icon: UserPlus,      href: "/admin-dashboard/onboard",    active: true  },
   { id: "export",     label: "Export",     icon: Download,      href: "/admin-dashboard/export",     active: false },
   { id: "globals",    label: "Globals",    icon: Settings,      href: "/admin-dashboard/globals",    active: true  },
+  { id: "documents",  label: "Documents",  icon: FolderOpen,    href: "/admin-dashboard/documents",  active: true  },
 ]
 
 const ROLE_DASHBOARD: Record<string, string> = {

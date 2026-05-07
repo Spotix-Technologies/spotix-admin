@@ -6,6 +6,7 @@ import {
   Flag, EyeOff, Eye, ShieldBan, Trash2, AlertTriangle,
   X, CheckCircle, DollarSign, Link2, Tag, Info,
 } from "lucide-react"
+import AdminAttendeesTab from "./admin-attendees-tab"
 
 interface TicketTier {
   policy: string
@@ -151,6 +152,7 @@ export default function EventDataTab({ eventData, onUpdate, onDeleted }: Props) 
   const [activeImage, setActiveImage] = useState(event.eventImage)
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null)
   const [saving, setSaving] = useState<string | null>(null)
+  const [activeTab, setActiveTab] = useState<"overview" | "attendees">("overview")
 
   const [flagModal, setFlagModal] = useState(false)
   const [flagReason, setFlagReason] = useState("")
@@ -258,6 +260,43 @@ export default function EventDataTab({ eventData, onUpdate, onDeleted }: Props) 
           {toast.msg}
         </div>
       )}
+
+      {/* Tab bar */}
+      <div className="flex gap-1 p-1 bg-slate-100 rounded-xl w-fit">
+        <button
+          onClick={() => setActiveTab("overview")}
+          className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all ${
+            activeTab === "overview"
+              ? "bg-white text-violet-700 shadow-sm"
+              : "text-slate-500 hover:text-slate-700"
+          }`}
+        >
+          Overview
+        </button>
+        <button
+          onClick={() => setActiveTab("attendees")}
+          className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all flex items-center gap-1.5 ${
+            activeTab === "attendees"
+              ? "bg-white text-violet-700 shadow-sm"
+              : "text-slate-500 hover:text-slate-700"
+          }`}
+        >
+          <Users className="w-3.5 h-3.5" />
+          Attendees
+          <span className="text-[10px] bg-violet-100 text-violet-600 px-1.5 py-0.5 rounded-full font-bold">
+            {event.attendeeCount ?? "–"}
+          </span>
+        </button>
+      </div>
+
+      {/* Attendees tab */}
+      {activeTab === "attendees" && (
+        <AdminAttendeesTab eventId={event.id} eventName={event.eventName} />
+      )}
+
+      {/* Overview tab */}
+      {activeTab === "overview" && (
+      <>
 
       {/* Hero image */}
       <div className="rounded-2xl overflow-hidden bg-slate-100 border border-slate-200 shadow-sm">
@@ -586,6 +625,9 @@ export default function EventDataTab({ eventData, onUpdate, onDeleted }: Props) 
           />
         </div>
       </ActionModal>
+
+      )}
+      {/* end overview tab */}
 
     </div>
   )
