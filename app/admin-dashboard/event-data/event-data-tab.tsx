@@ -626,6 +626,7 @@ export default function EventDataTab({ eventData, onUpdate, onDeleted }: Props) 
         </div>
       </ActionModal>
 
+      </>
       )}
       {/* end overview tab */}
 
