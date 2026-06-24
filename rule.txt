@@ -1,1 +1,19 @@
-The rule going forward: Any page component that renders inside DashboardLayoutClient should never use min-h-screen, h-screen, or set its own bg- background at the root. The layout already owns the full-height container and background (bg-gray-50). Page content just needs to flow naturally inside <main>.
+Consider these two files. One is the spotix Admin and the other is the Spotix user.
+
+There's two main changes I need you to help me achieve
+
+1. On the all admin dashboards, create a new item called Upload events. See the idea, admins on Spotix can upload different events they find around. Study the cloudinary files in spotix-user as it will be cloudinary that'll be used to upload files. The admin sets the image, event name, description, host, state, location, genre, event start and end date, ticket policy (can either be free or there'll be an option for if the admin doesn't have an idea of the pricing) and there'll be a toggle called spotix event. If toggled on, the admin will provide the spotix event ID. If toggled off the admin can add a link to where the user can get tickets for the event. The event will be stored in firestore in a collection called discover/{stateOfTheEvent}/{eventDiscoveryAutoId}. The name of the admin who posted it will also be shown
+
+2. On the spotix user, you see that page called discover, we are going to remodel it. Let there be an image called discover.png. On that image add text Event Discovery in Nigeria. I want the page to request for location access. I want precise state location of the device. The app automatically detects the exact state of the user accurately in Nigeria and then shows the different events in that state. The user can change state as they please and they can also change the genre.
+
+If the event is affiliated with spotix, the eventId will be present and then just navigate to /event/{eventId}. 
+
+There will be a discover/[Id]/page.tsx. This is where the full spec of the event will be shown. For events that have a spotix affiliation show a marker text that "The tickets for this event is sold on Spotix" If the event is not affiliated with spotix show a text like "Spotix is just listing this event and is NOT affiliated with this event". For events that we are not affiliated with let there be a "Take Down" button. When clicked show a dialog with the title "Remove your event from our Listing". Show text like "Spotix discovery system just aggregates events from different parts of Nigeria to help event organizers create awareness about their event, for tickets not sold on Spotix, we do not collect any form of fee from the event and we can remove events from our public listings on your call" Feel free to restructure the grammar. The user will then enter a reson why they want this event removed, when they click submit however let the link open a whatsapp message to +2348123927685 with the reason they provided. In addition also add "the discovery Id is {discoverId} and the state of the event is {eventState}
+
+ When the user clicks Get Tickets from a listing that is NOT affiliated with Spotix show a small dialog with link like "You are about to leave Spotix. We don't sell tickets for this particular event, we are just creating awareness about it" There will be a button that says "OK, got it"
+
+WHen clicked it sends them on a new page to the link attached and adds a referrer=spotix.com.ng
+
+In the admin section let there be a place for retrieval of discovered events. By pasting the event state and the ID, make a direct firebase lookup and pull the details. The admin can then either modify ANY part of the event or just flat out delete it.
+
+The discovery api MUST be rate limited. And ensure that the api only returns events that have not yet occured, past events should not be returned. In the home page of the users also ensure that when the API returns the list of 10 recent events for upcoming, live or past events, let the UI always sort them by date and place them in the right section. If an event has passed but is still among the recent 10, let the UI store it in the past events collection.

@@ -263,22 +263,16 @@ export function EventDataClient() {
 
       {/* Header */}
       <div className="mb-8">
-        <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-lg bg-violet-50 flex items-center justify-center shrink-0">
+            <CalendarDays className="w-4 h-4 text-violet-600" />
+          </div>
           <div>
-            <div className="inline-flex items-center gap-2 bg-violet-50 border border-violet-200 rounded-full px-3 py-1 mb-3">
-              <div className="w-1.5 h-1.5 bg-violet-500 rounded-full" />
-              <span className="text-xs text-violet-600 font-semibold tracking-widest uppercase">Spotix Admin</span>
-            </div>
-            <h1 className="text-2xl md:text-3xl font-bold text-slate-900 tracking-tight">Event Data</h1>
-            <p className="text-slate-500 text-sm mt-1">
+            <h1 className="text-xl md:text-2xl font-bold text-slate-900 tracking-tight">Event Data</h1>
+            <p className="text-slate-500 text-sm mt-0.5">
               Showing 10 most recent events. Use search to find any event.
             </p>
           </div>
-          {session && (
-            <p className="text-xs text-slate-400">
-              Signed in as <span className="font-medium text-slate-600">{session.username}</span>
-            </p>
-          )}
         </div>
       </div>
 

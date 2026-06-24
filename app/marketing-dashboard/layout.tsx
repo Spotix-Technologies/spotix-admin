@@ -8,7 +8,14 @@ export const metadata: Metadata = { title: "Marketing Dashboard | Spotix" }
 export default async function Layout({ children }: { children: React.ReactNode }) {
   const user = await getRoleUser("marketing")
   return (
-    <RoleDashboardLayoutClient user={user} dashboardLabel="Marketing Dashboard" basePath="/marketing-dashboard">
+    <RoleDashboardLayoutClient
+      user={user}
+      dashboardLabel="Marketing Dashboard"
+      basePath="/marketing-dashboard"
+      extraNavItems={[
+        { label: "Upload Events", href: "/admin-dashboard/upload-events", iconName: "Globe" },
+      ]}
+    >
       {children}
     </RoleDashboardLayoutClient>
   )

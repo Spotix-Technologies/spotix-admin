@@ -6,16 +6,16 @@ import { useState } from "react"
 import { useRouter, usePathname } from "next/navigation"
 import Image from "next/image"
 import {
-  Home, Archive, CalendarDays, FileText, Vote,
+  Home, Receipt, CalendarDays, FileText, Vote,
   ShoppingBag, Wallet, Users, UserPlus, Download,
   Settings, LogOut, Loader2, ClipboardList,
-  SwitchCamera, FolderOpen,
+  SwitchCamera, FolderOpen, Globe,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   Sidebar, SidebarContent, SidebarFooter, SidebarHeader,
   SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarProvider,
-  SidebarInset, SidebarTrigger,
+  SidebarInset, SidebarTrigger, SidebarCollapseToggle, useSidebar,
 } from "@/components/ui/sidebar"
 import { Separator } from "@/components/ui/separator"
 
@@ -34,10 +34,11 @@ interface DashboardLayoutClientProps {
 }
 
 const menuItems = [
-  { id: "home",       label: "Home",       icon: Home,          href: "/admin-dashboard",            active: true  },
-  { id: "archive",    label: "Archive",    icon: Archive,       href: "/admin-dashboard/archive",    active: false },
-  { id: "event-data", label: "Event Data", icon: CalendarDays,  href: "/admin-dashboard/event-data", active: true  },
-  { id: "users",      label: "Users",      icon: Users,         href: "/admin-dashboard/users",      active: true  },
+  { id: "home",          label: "Home",          icon: Home,          href: "/admin-dashboard",                   active: true  },
+  { id: "references",   label: "References",   icon: Receipt,       href: "/admin-dashboard/references",        active: true  },
+  { id: "event-data",   label: "Event Data",   icon: CalendarDays,  href: "/admin-dashboard/event-data",        active: true  },
+  { id: "upload-events",label: "Upload Events",icon: Globe,         href: "/admin-dashboard/upload-events",     active: true  },
+  { id: "users",        label: "Users",        icon: Users,         href: "/admin-dashboard/users",             active: true  },
   { id: "tasks",      label: "Tasks",      icon: ClipboardList, href: "/admin-dashboard/tasks",      active: true  },
   { id: "reports",    label: "Reports",    icon: FileText,      href: "/admin-dashboard/reports",    active: false },
   { id: "votes",      label: "Votes",      icon: Vote,          href: "/admin-dashboard/votes",      active: false },
@@ -71,11 +72,14 @@ function getGreeting(): string {
   return "Good evening"
 }
 
-export function DashboardLayoutClient({ user, children }: DashboardLayoutClientProps) {
+/* ── Inner sidebar that can read useSidebar context ── */
+function SidebarInner({ user }: { user: User }) {
   const router = useRouter()
   const pathname = usePathname()
+  const { desktopCollapsed } = useSidebar()
   const [loggingOut, setLoggingOut] = useState(false)
   const [switchingRole, setSwitchingRole] = useState(false)
+  const [showSwitch, setShowSwitch] = useState(false)
 
   const switchableRoles = user.secondaryRoles.filter((r) => r !== "admin")
 
@@ -112,64 +116,99 @@ export function DashboardLayoutClient({ user, children }: DashboardLayoutClientP
     return pathname.startsWith(href)
   }
 
+  const collapsed = desktopCollapsed
+
   return (
-    <SidebarProvider>
-      <Sidebar className="border-r border-gray-200">
-        <SidebarHeader className="p-3 md:p-4">
-          <div className="flex items-center gap-2 md:gap-3">
-            <div className="w-8 h-8 md:w-10 md:h-10 rounded-lg bg-[#6b2fa5] flex items-center justify-center flex-shrink-0">
-              <span className="text-white font-bold text-base md:text-lg">S</span>
-            </div>
+    <Sidebar className="border-r border-gray-200">
+      {/* ── Header ── */}
+      <SidebarHeader className="p-3 md:p-4">
+        <div className={`flex items-center gap-2 md:gap-3 ${collapsed ? "lg:justify-center" : ""}`}>
+          {/* Logo — always visible */}
+          <div className="w-8 h-8 md:w-10 md:h-10 rounded-lg bg-[#6b2fa5] flex items-center justify-center flex-shrink-0 overflow-hidden">
+            <Image
+              src="/logo.png"
+              alt="Spotix"
+              width={40}
+              height={40}
+              className="object-contain w-full h-full"
+              onError={(e) => {
+                // Fallback to "S" if logo.png not yet present
+                const target = e.currentTarget as HTMLImageElement
+                target.style.display = "none"
+                const parent = target.parentElement
+                if (parent && !parent.querySelector("span")) {
+                  const span = document.createElement("span")
+                  span.className = "text-white font-bold text-base"
+                  span.textContent = "S"
+                  parent.appendChild(span)
+                }
+              }}
+            />
+          </div>
+          {/* Text — hidden when desktop-collapsed */}
+          {!collapsed && (
             <div className="min-w-0">
               <h2 className="font-semibold text-gray-900 text-sm md:text-base truncate">Spotix Admin</h2>
               <p className="text-[10px] md:text-xs text-gray-500 truncate">Management Portal</p>
             </div>
-          </div>
-        </SidebarHeader>
-        <Separator />
-        <SidebarContent className="p-1.5 md:p-2">
-          <SidebarMenu>
-            {menuItems.map((item) => (
-              <SidebarMenuItem key={item.id}>
+          )}
+        </div>
+      </SidebarHeader>
+
+      <Separator />
+
+      {/* ── Nav items ── */}
+      <SidebarContent className="p-1.5 md:p-2">
+        <SidebarMenu>
+          {menuItems.map((item) => (
+            <SidebarMenuItem key={item.id}>
+              <SidebarMenuButton
+                onClick={() => item.active && router.push(item.href)}
+                isActive={isCurrentPage(item.href)}
+                tooltip={!item.active ? "Coming soon" : item.label}
+                className={`w-full justify-start text-sm ${!item.active ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
+              >
+                <item.icon className={`w-4 h-4 flex-shrink-0 ${isCurrentPage(item.href) ? "text-[#6b2fa5]" : ""}`} />
+                <span className="truncate">{item.label}</span>
+                {!item.active && (
+                  <span className="ml-auto text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded flex-shrink-0">
+                    Soon
+                  </span>
+                )}
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          ))}
+        </SidebarMenu>
+
+        {/* Switch Role */}
+        {switchableRoles.length > 0 && (
+          <div className="mt-4 px-1">
+            <Separator className="mb-3" />
+            {!collapsed && (
+              <p className="text-[10px] uppercase tracking-wider text-gray-400 px-2 mb-1">Switch to</p>
+            )}
+            {switchableRoles.map((role) => (
+              <SidebarMenuItem key={role}>
                 <SidebarMenuButton
-                  onClick={() => item.active && router.push(item.href)}
-                  isActive={isCurrentPage(item.href)}
-                  className={`w-full justify-start text-sm ${!item.active ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
-                  tooltip={!item.active ? "Coming soon" : item.label}
+                  onClick={() => handleSwitchRole(role)}
+                  tooltip={ROLE_LABEL[role] ?? role}
+                  className="w-full justify-start text-sm cursor-pointer text-gray-500"
                 >
-                  <item.icon className={`w-4 h-4 flex-shrink-0 ${isCurrentPage(item.href) ? "text-[#6b2fa5]" : ""}`} />
-                  <span className="truncate">{item.label}</span>
-                  {!item.active && (
-                    <span className="ml-auto text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded flex-shrink-0">
-                      Soon
-                    </span>
-                  )}
+                  <SwitchCamera className="w-4 h-4 flex-shrink-0" />
+                  <span className="truncate">{ROLE_LABEL[role] ?? role}</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
             ))}
-          </SidebarMenu>
+          </div>
+        )}
+      </SidebarContent>
 
-          {/* Switch Role section */}
-          {switchableRoles.length > 0 && (
-            <div className="mt-4 px-1">
-              <Separator className="mb-3" />
-              <p className="text-[10px] uppercase tracking-wider text-gray-400 px-2 mb-1">Switch to</p>
-              {switchableRoles.map((role) => (
-                <SidebarMenuItem key={role}>
-                  <SidebarMenuButton
-                    onClick={() => handleSwitchRole(role)}
-                    className="w-full justify-start text-sm cursor-pointer text-gray-500"
-                  >
-                    <SwitchCamera className="w-4 h-4 flex-shrink-0" />
-                    <span className="truncate">{ROLE_LABEL[role] ?? role}</span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </div>
-          )}
-        </SidebarContent>
-        <Separator />
-        <SidebarFooter className="p-3 md:p-4">
+      <Separator />
+
+      {/* ── Footer ── */}
+      <SidebarFooter className="p-3 md:p-4">
+        {/* User info — hidden when collapsed */}
+        {!collapsed ? (
           <div className="flex items-center gap-2 md:gap-3 mb-2 md:mb-3">
             <div className="w-8 h-8 md:w-10 md:h-10 rounded-full overflow-hidden border-2 border-[#6b2fa5] flex-shrink-0">
               {user.profilePicture ? (
@@ -183,26 +222,54 @@ export function DashboardLayoutClient({ user, children }: DashboardLayoutClientP
               <p className="text-[10px] md:text-xs text-gray-500 truncate">{ROLE_LABEL[user.role] ?? "Admin"}</p>
             </div>
           </div>
-          <Button
-            onClick={handleLogout}
-            disabled={loggingOut || switchingRole}
-            variant="outline"
-            className="w-full border-[#6b2fa5] text-[#6b2fa5] hover:bg-[#6b2fa5] hover:text-white bg-transparent text-xs md:text-sm"
-            size="sm"
-          >
-            {loggingOut ? (
-              <><Loader2 className="w-3 h-3 mr-1.5 animate-spin" /><span>Logging out...</span></>
-            ) : (
-              <><LogOut className="w-3 h-3 mr-1.5" /><span>Logout</span></>
-            )}
-          </Button>
-        </SidebarFooter>
-      </Sidebar>
+        ) : (
+          /* Collapsed: just the avatar centred */
+          <div className="hidden lg:flex justify-center mb-2">
+            <div className="w-8 h-8 rounded-full overflow-hidden border-2 border-[#6b2fa5]">
+              {user.profilePicture ? (
+                <Image src={user.profilePicture} alt={user.username} width={32} height={32} className="object-cover w-full h-full" />
+              ) : (
+                <Image src="/TempUser.svg" alt="Default user" width={32} height={32} className="object-cover w-full h-full" />
+              )}
+            </div>
+          </div>
+        )}
 
-      {/* SidebarInset: flex-1, no h-screen — parent SidebarProvider owns height */}
+        {/* Logout button */}
+        <Button
+          onClick={handleLogout}
+          disabled={loggingOut || switchingRole}
+          variant="outline"
+          className={`w-full border-[#6b2fa5] text-[#6b2fa5] hover:bg-[#6b2fa5] hover:text-white bg-transparent text-xs md:text-sm ${collapsed ? "lg:px-2" : ""}`}
+          size="sm"
+          title="Logout"
+        >
+          {loggingOut ? (
+            <Loader2 className="w-3 h-3 animate-spin" />
+          ) : (
+            <LogOut className="w-3 h-3" />
+          )}
+          {!collapsed && (
+            <span className="ml-1.5">{loggingOut ? "Logging out..." : "Logout"}</span>
+          )}
+        </Button>
+      </SidebarFooter>
+    </Sidebar>
+  )
+}
+
+/* ── Root layout client ── */
+export function DashboardLayoutClient({ user, children }: DashboardLayoutClientProps) {
+  return (
+    <SidebarProvider>
+      <SidebarInner user={user} />
+
       <SidebarInset>
         <header className="bg-white border-b border-gray-200 px-3 md:px-4 py-2 md:py-3 flex items-center gap-2 md:gap-4 flex-shrink-0">
+          {/* Mobile hamburger */}
           <SidebarTrigger className="-ml-1" />
+          {/* Desktop collapse toggle */}
+          <SidebarCollapseToggle className="-ml-1" />
           <Separator orientation="vertical" className="h-4 md:h-6" />
           <div className="min-w-0 flex-1">
             <h1 className="text-sm md:text-lg font-semibold text-gray-900 truncate">
@@ -211,7 +278,6 @@ export function DashboardLayoutClient({ user, children }: DashboardLayoutClientP
             <p className="text-xs md:text-sm text-gray-500 truncate hidden sm:block">Welcome to Spotix Admin Portal</p>
           </div>
         </header>
-        {/* flex-1 + overflow-y-auto: this is the scrollable content area */}
         <main className="flex-1 overflow-y-auto p-3 md:p-4 lg:p-6 bg-gray-50 pb-8">
           {children}
         </main>
@@ -219,7 +285,3 @@ export function DashboardLayoutClient({ user, children }: DashboardLayoutClientP
     </SidebarProvider>
   )
 }
-function setShowSwitch(arg0: boolean) {
-  throw new Error("Function not implemented.")
-}
-

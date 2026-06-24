@@ -1,10 +1,11 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import {
   MapPin, Calendar, Clock, Ticket, Users, TrendingUp, Heart,
   Flag, EyeOff, Eye, ShieldBan, Trash2, AlertTriangle,
-  X, CheckCircle, DollarSign, Link2, Tag, Info,
+  X, CheckCircle, DollarSign, Link2, Tag, Info, Wallet,
+  Loader2, AlertCircle,
 } from "lucide-react"
 import AdminAttendeesTab from "./admin-attendees-tab"
 
@@ -124,7 +125,7 @@ function ActionModal({
           <button
             onClick={onConfirm}
             disabled={loading || confirmDisabled}
-            className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${danger ? "bg-red-600 hover:bg-red-700 text-white" : "bg-violet-600 hover:bg-violet-700 text-white"}`}
+            className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${danger ? "bg-red-600 hover:bg-red-700 text-white" : "bg-[#6b2fa5] hover:bg-[#5a2589] text-white"}`}
           >
             {loading ? "Processing…" : confirmLabel}
           </button>
@@ -141,8 +142,109 @@ function ReasonTextarea({ value, onChange, placeholder }: { value: string; onCha
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder || "Reason for this action (required)…"}
       rows={3}
-      className="w-full text-sm bg-white border border-slate-200 rounded-lg px-3 py-2.5 text-slate-800 placeholder:text-slate-400 resize-none focus:outline-none focus:ring-2 focus:ring-violet-400/50 focus:border-violet-400"
+      className="w-full text-sm bg-white border border-slate-200 rounded-lg px-3 py-2.5 text-slate-800 placeholder:text-slate-400 resize-none focus:outline-none focus:ring-2 focus:ring-[#6b2fa5/30] focus:border-[#6b2fa5]"
     />
+  )
+}
+
+/* ── Admin Payouts Tab ── */
+interface PayoutRecord {
+  payoutId: string
+  amount: number
+  status: string
+}
+
+const PAYOUT_STATUS: Record<string, { label: string; className: string }> = {
+  pending:    { label: "Pending",    className: "bg-amber-100 text-amber-700 border-amber-200" },
+  processing: { label: "Processing", className: "bg-blue-100 text-blue-700 border-blue-200" },
+  successful: { label: "Successful", className: "bg-emerald-100 text-emerald-700 border-emerald-200" },
+  failed:     { label: "Failed",     className: "bg-red-100 text-red-700 border-red-200" },
+}
+
+function AdminPayoutsTab({ eventId }: { eventId: string }) {
+  const [payouts, setPayouts] = useState<PayoutRecord[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true)
+      setError(null)
+      try {
+        const res = await fetch(`/api/v1/event-data/payouts?eventId=${eventId}`)
+        const json = await res.json()
+        if (!res.ok) throw new Error(json.error || "Failed to load payouts")
+        setPayouts(json.payouts || [])
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Failed to load payouts")
+      } finally {
+        setLoading(false)
+      }
+    }
+    load()
+  }, [eventId])
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <div className="text-center space-y-3">
+          <Loader2 className="w-6 h-6 animate-spin text-[#6b2fa5] mx-auto" />
+          <p className="text-sm text-slate-500">Loading payouts…</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center py-16">
+        <div className="flex items-center gap-2.5 text-sm text-red-500">
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          {error}
+        </div>
+      </div>
+    )
+  }
+
+  if (payouts.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 gap-3 text-slate-400">
+        <Wallet className="w-8 h-8 text-slate-300" />
+        <p className="text-sm">No payouts found for this event.</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+      <div className="overflow-x-auto">
+        <table className="w-full">
+          <thead className="bg-slate-50 border-b border-slate-200">
+            <tr>
+              <th className="px-5 py-3.5 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">Payout ID</th>
+              <th className="px-5 py-3.5 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">Amount</th>
+              <th className="px-5 py-3.5 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">Status</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {payouts.map((p) => {
+              const meta = PAYOUT_STATUS[p.status] ?? { label: p.status, className: "bg-slate-100 text-slate-600 border-slate-200" }
+              return (
+                <tr key={p.payoutId} className="hover:bg-slate-50 transition-colors">
+                  <td className="px-5 py-3.5 font-mono text-xs text-slate-700">{p.payoutId}</td>
+                  <td className="px-5 py-3.5 text-sm font-semibold text-slate-800">₦{Number(p.amount).toLocaleString()}</td>
+                  <td className="px-5 py-3.5">
+                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border ${meta.className}`}>
+                      {meta.label}
+                    </span>
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
   )
 }
 
@@ -152,7 +254,7 @@ export default function EventDataTab({ eventData, onUpdate, onDeleted }: Props) 
   const [activeImage, setActiveImage] = useState(event.eventImage)
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null)
   const [saving, setSaving] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<"overview" | "attendees">("overview")
+  const [activeTab, setActiveTab] = useState<"overview" | "attendees" | "payouts">("overview")
 
   const [flagModal, setFlagModal] = useState(false)
   const [flagReason, setFlagReason] = useState("")
@@ -262,12 +364,12 @@ export default function EventDataTab({ eventData, onUpdate, onDeleted }: Props) 
       )}
 
       {/* Tab bar */}
-      <div className="flex gap-1 p-1 bg-slate-100 rounded-xl w-fit">
+      <div className="flex gap-1 p-1 bg-slate-100 rounded-xl w-fit flex-wrap">
         <button
           onClick={() => setActiveTab("overview")}
           className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all ${
             activeTab === "overview"
-              ? "bg-white text-violet-700 shadow-sm"
+              ? "bg-white text-[#6b2fa5] shadow-sm"
               : "text-slate-500 hover:text-slate-700"
           }`}
         >
@@ -277,21 +379,37 @@ export default function EventDataTab({ eventData, onUpdate, onDeleted }: Props) 
           onClick={() => setActiveTab("attendees")}
           className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all flex items-center gap-1.5 ${
             activeTab === "attendees"
-              ? "bg-white text-violet-700 shadow-sm"
+              ? "bg-white text-[#6b2fa5] shadow-sm"
               : "text-slate-500 hover:text-slate-700"
           }`}
         >
           <Users className="w-3.5 h-3.5" />
           Attendees
-          <span className="text-[10px] bg-violet-100 text-violet-600 px-1.5 py-0.5 rounded-full font-bold">
+          <span className="text-[10px] bg-[#6b2fa5/10] text-[#6b2fa5] px-1.5 py-0.5 rounded-full font-bold">
             {event.attendeeCount ?? "–"}
           </span>
+        </button>
+        <button
+          onClick={() => setActiveTab("payouts")}
+          className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all flex items-center gap-1.5 ${
+            activeTab === "payouts"
+              ? "bg-white text-[#6b2fa5] shadow-sm"
+              : "text-slate-500 hover:text-slate-700"
+          }`}
+        >
+          <Wallet className="w-3.5 h-3.5" />
+          Payouts
         </button>
       </div>
 
       {/* Attendees tab */}
       {activeTab === "attendees" && (
         <AdminAttendeesTab eventId={event.id} eventName={event.eventName} />
+      )}
+
+      {/* Payouts tab */}
+      {activeTab === "payouts" && (
+        <AdminPayoutsTab eventId={event.id} />
       )}
 
       {/* Overview tab */}
@@ -312,7 +430,7 @@ export default function EventDataTab({ eventData, onUpdate, onDeleted }: Props) 
         {allImages.length > 1 && (
           <div className="flex gap-2 p-3 overflow-x-auto bg-slate-50 border-t border-slate-100">
             {allImages.map((img, i) => (
-              <button key={i} onClick={() => setActiveImage(img)} className={`shrink-0 w-14 h-14 rounded-lg overflow-hidden border-2 transition-all ${activeImage === img ? "border-violet-500" : "border-slate-200 opacity-60 hover:opacity-90"}`}>
+              <button key={i} onClick={() => setActiveImage(img)} className={`shrink-0 w-14 h-14 rounded-lg overflow-hidden border-2 transition-all ${activeImage === img ? "border-[#6b2fa5]" : "border-slate-200 opacity-60 hover:opacity-90"}`}>
                 <img src={img} alt="" className="w-full h-full object-cover" />
               </button>
             ))}
@@ -351,7 +469,7 @@ export default function EventDataTab({ eventData, onUpdate, onDeleted }: Props) 
 
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <StatCard label="Tickets Sold" value={event.ticketsSold} icon={Ticket} accent="text-violet-500" />
+        <StatCard label="Tickets Sold" value={event.ticketsSold} icon={Ticket} accent="text-[#6b2fa5]" />
         <StatCard label="Total Revenue" value={money(event.totalRevenue)} icon={TrendingUp} accent="text-emerald-500" />
         <StatCard label="Paid Out" value={money(event.totalPaidOut)} icon={DollarSign} accent="text-amber-500" />
         <StatCard label="Likes" value={event.likeCount} icon={Heart} accent="text-pink-500" />
@@ -361,7 +479,7 @@ export default function EventDataTab({ eventData, onUpdate, onDeleted }: Props) 
       {event.ticketPrices.length > 0 && (
         <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
           <div className="px-5 py-4 border-b border-slate-100 flex items-center gap-2">
-            <Ticket className="w-4 h-4 text-violet-500" />
+            <Ticket className="w-4 h-4 text-[#6b2fa5]" />
             <h3 className="font-semibold text-sm text-slate-700">Ticket Tiers</h3>
           </div>
           <div className="divide-y divide-slate-100">
@@ -393,7 +511,7 @@ export default function EventDataTab({ eventData, onUpdate, onDeleted }: Props) 
                         <span className="text-emerald-600 font-medium">{money(rev)}</span>
                       </div>
                       <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                        <div className="h-full bg-gradient-to-r from-violet-500 to-indigo-500 rounded-full transition-all" style={{ width: `${pct}%` }} />
+                        <div className="h-full bg-gradient-to-r from-[#6b2fa5] to-[#4f46e5] rounded-full transition-all" style={{ width: `${pct}%` }} />
                       </div>
                     </div>
                   )}

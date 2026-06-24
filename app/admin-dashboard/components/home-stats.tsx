@@ -5,6 +5,7 @@ import { Loader2 } from "lucide-react"
 import { YearStats } from "./year-stats"
 import { MonthStats } from "./month-stats"
 import { DayStats } from "./day-stats"
+import { RevenueBreakdown } from "./revenue-breakdown"
 
 export interface StatsData {
   year: string
@@ -140,6 +141,9 @@ export function HomeStats() {
 
       {/* Year Stats */}
       <YearStats stats={stats} />
+
+      {/* Revenue Breakdown Pie Chart */}
+      <RevenueBreakdown stats={stats} />
 
       {/* Month Stats */}
       <MonthStats stats={stats} />
