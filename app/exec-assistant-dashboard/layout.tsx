@@ -14,7 +14,11 @@ export default async function Layout({ children }: { children: React.ReactNode }
       basePath="/exec-assistant-dashboard"
       extraNavItems={[
         { label: "Documents", href: "/exec-assistant-dashboard/documents", iconName: "FolderOpen" },
-        { label: "Upload Events", href: "/admin-dashboard/upload-events", iconName: "Globe" },
+        { label: "References", href: "/exec-assistant-dashboard/references", iconName: "Receipt" },
+        { label: "Upload Events", href: "/exec-assistant-dashboard/upload-events", iconName: "Globe" },
+        { label: "Event Data", href: "/exec-assistant-dashboard/event-data", iconName: "CalendarDays" },
+        { label: "Verification", href: "/exec-assistant-dashboard/verification", iconName: "ShieldCheck" },
+        { label: "Votes", href: "/exec-assistant-dashboard/votes", iconName: "Vote" },
       ]}
     >
       {children}

@@ -5,10 +5,8 @@ import {
   FilePlus, Upload, Search, Trash2, AlertTriangle, X,
   FileText, FileJson, File, Music, Video, Image,
   ChevronDown, CheckCircle, Loader2, FolderOpen,
-  Calendar, Hash, ArrowRight, RefreshCw,
+  Calendar, Hash, ArrowRight, RefreshCw, Tag,
 } from "lucide-react"
-import { storage } from "@/lib/firebase-client"
-import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from "firebase/storage"
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 type DocType = "REQ" | "MEM" | "MIN" | "DOC"
@@ -31,6 +29,7 @@ interface DocumentMeta {
   reference: string
   dateStamp: string
   index: string
+  docName?: string | null
   createdByUsername: string
   createdAt: string
   fileCount: number
@@ -141,22 +140,28 @@ function CreateDocDialog({
   open: boolean; onClose: () => void; onCreated: (doc: DocumentMeta) => void
 }) {
   const [selected, setSelected] = useState<DocType | null>(null)
+  const [docName, setDocName] = useState("")
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const handleCreate = async () => {
     if (!selected) return
+    if (selected === "DOC" && !docName.trim()) {
+      setError("Please give this document a name so it can be searched later")
+      return
+    }
     setLoading(true); setError(null)
     try {
       const res = await fetch("/api/v1/documents", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ docType: selected }),
+        body: JSON.stringify({ docType: selected, name: docName.trim() || undefined }),
       })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error)
       onCreated(json.document)
       setSelected(null)
+      setDocName("")
       onClose()
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to create document")
@@ -209,6 +214,23 @@ function CreateDocDialog({
             </button>
           ))}
 
+          <div>
+            <label className="text-xs font-semibold text-slate-600 mb-1.5 flex items-center gap-1.5">
+              <Tag className="w-3.5 h-3.5" />
+              Document name {selected === "DOC" ? "*" : "(optional)"}
+            </label>
+            <input
+              type="text"
+              value={docName}
+              onChange={(e) => setDocName(e.target.value)}
+              placeholder={selected === "DOC" ? "e.g. Binge Xperience deal" : "e.g. Q3 marketing memo"}
+              className="w-full px-3 py-2.5 text-sm bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-400/40 focus:border-violet-400 placeholder:text-slate-400"
+            />
+            <p className="text-xs text-slate-400 mt-1">
+              Lets you search for this document by name later, in addition to its date and index.
+            </p>
+          </div>
+
           {error && (
             <p className="text-sm text-red-500 flex items-center gap-2">
               <AlertTriangle className="w-4 h-4" /> {error}
@@ -222,7 +244,7 @@ function CreateDocDialog({
           </button>
           <button
             onClick={handleCreate}
-            disabled={!selected || loading}
+            disabled={!selected || loading || (selected === "DOC" && !docName.trim())}
             className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-violet-600 text-white font-semibold text-sm hover:bg-violet-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-violet-500/25"
           >
             {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <FilePlus className="w-4 h-4" />}
@@ -294,34 +316,27 @@ function UploadDialog({
 
     setUploading(true); setUploadProgress(0)
     try {
-      const path = `documents/${docMeta.id}/${Date.now()}_${file.name}`
-      const storageRef = ref(storage, path)
-      const task = uploadBytesResumable(storageRef, file)
+      // Upload to UploadThing via our server-side proxy (keeps API tokens off the client)
+      const fd = new FormData()
+      fd.append("file", file)
 
-      await new Promise<void>((resolve, reject) => {
-        task.on("state_changed",
-          (snap) => setUploadProgress(Math.round((snap.bytesTransferred / snap.totalBytes) * 100)),
-          reject,
-          resolve
-        )
-      })
+      setUploadProgress(20)
+      const uploadRes = await fetch("/api/v1/documents/upload", { method: "POST", body: fd })
+      const uploadJson = await uploadRes.json()
+      if (!uploadRes.ok) throw new Error(uploadJson.error || "Upload failed")
+      setUploadProgress(80)
 
-      const fileUrl = await getDownloadURL(storageRef)
+      const { fileUrl, storagePath, fileName, fileType, fileSize } = uploadJson
 
       const res = await fetch(`/api/v1/documents/${docMeta.id}/files`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          fileName: file.name,
-          fileUrl,
-          fileType: file.type,
-          fileSize: file.size,
-          storagePath: path,
-        }),
+        body: JSON.stringify({ fileName, fileUrl, fileType, fileSize, storagePath }),
       })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error)
 
+      setUploadProgress(100)
       setFiles((prev) => [...prev, json.file])
       setDocMeta((prev) => prev ? { ...prev, fileCount: (prev.fileCount ?? 0) + 1 } : prev)
       showToast("File uploaded successfully", "success")
@@ -336,13 +351,7 @@ function UploadDialog({
     if (!deleteTarget || !docMeta) return
     setDeleting(true)
     try {
-      // Delete from storage
-      try {
-        const storageRef = ref(storage, deleteTarget.storagePath)
-        await deleteObject(storageRef)
-      } catch { /* file may already be gone */ }
-
-      // Delete from Firestore
+      // Firestore metadata + the underlying UploadThing file are both removed server-side
       const res = await fetch(`/api/v1/documents/${docMeta.id}/files?fileId=${deleteTarget.id}`, {
         method: "DELETE",
       })
@@ -440,6 +449,7 @@ function UploadDialog({
                     </div>
                     <div>
                       <p className="text-sm font-bold text-slate-800 font-mono">{docMeta.id}</p>
+                      {docMeta.docName && <p className="text-xs text-violet-600 font-semibold mt-0.5">{docMeta.docName}</p>}
                       <p className="text-xs text-slate-500">Created by {docMeta.createdByUsername} · {fmtDate(docMeta.createdAt)}</p>
                     </div>
                   </div>
@@ -565,23 +575,40 @@ function UploadDialog({
 
 // ─── Search Panel ─────────────────────────────────────────────────────────────
 function SearchPanel({ canWrite, showToast }: { canWrite: boolean; showToast: (m: string, t: "success" | "error") => void }) {
-  const [mode, setMode] = useState<"single" | "range">("single")
+  const [mode, setMode] = useState<"single" | "range" | "name">("single")
   const [docType, setDocType] = useState<DocType>("REQ")
   const [date, setDate] = useState("")
   const [index, setIndex] = useState("")
   const [dateFrom, setDateFrom] = useState("")
   const [dateTo, setDateTo] = useState("")
+  const [nameQuery, setNameQuery] = useState("")
   const [loading, setLoading] = useState(false)
   const [singleResult, setSingleResult] = useState<{ document: DocumentMeta; files: DocFile[] } | null>(null)
   const [rangeResults, setRangeResults] = useState<{ dateStamp: string; docs: DocumentMeta[] }[] | null>(null)
+  const [nameResults, setNameResults] = useState<DocumentMeta[] | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   // Convert date-picker value (YYYY-MM-DD) to YYYYMMDD stamp
   const toStamp = (v: string) => v.replace(/-/g, "")
 
+  const handleNameSearch = async () => {
+    if (!nameQuery.trim()) return
+    setLoading(true); setError(null); setSingleResult(null); setRangeResults(null); setNameResults(null)
+    try {
+      const res = await fetch(`/api/v1/documents?name=${encodeURIComponent(nameQuery.trim())}`)
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error)
+      setNameResults(json.results || [])
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Search failed")
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const handleSingleSearch = async () => {
     if (!date) return
-    setLoading(true); setError(null); setSingleResult(null); setRangeResults(null)
+    setLoading(true); setError(null); setSingleResult(null); setRangeResults(null); setNameResults(null)
     try {
       const stamp = toStamp(date)
       const idx = index.trim() || "01"
@@ -598,7 +625,7 @@ function SearchPanel({ canWrite, showToast }: { canWrite: boolean; showToast: (m
 
   const handleRangeSearch = async () => {
     if (!dateFrom || !dateTo) return
-    setLoading(true); setError(null); setSingleResult(null); setRangeResults(null)
+    setLoading(true); setError(null); setSingleResult(null); setRangeResults(null); setNameResults(null)
     try {
       const from = toStamp(dateFrom)
       const to = toStamp(dateTo)
@@ -628,6 +655,7 @@ function SearchPanel({ canWrite, showToast }: { canWrite: boolean; showToast: (m
       setRangeResults((prev) =>
         prev ? prev.map((g) => ({ ...g, docs: g.docs.filter((d) => d.id !== deleteDocId) })).filter((g) => g.docs.length > 0) : prev
       )
+      setNameResults((prev) => prev ? prev.filter((d) => d.id !== deleteDocId) : prev)
     } catch (e) {
       showToast(e instanceof Error ? e.message : "Delete failed", "error")
     } finally {
@@ -668,6 +696,12 @@ function SearchPanel({ canWrite, showToast }: { canWrite: boolean; showToast: (m
           className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all flex items-center gap-1.5 ${mode === "range" ? "bg-white text-violet-700 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
         >
           Time Range
+        </button>
+        <button
+          onClick={() => setMode("name")}
+          className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all flex items-center gap-1.5 ${mode === "name" ? "bg-white text-violet-700 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
+        >
+          By Name
         </button>
       </div>
 
@@ -716,6 +750,26 @@ function SearchPanel({ canWrite, showToast }: { canWrite: boolean; showToast: (m
         </div>
       )}
 
+      {/* Name lookup input */}
+      {mode === "name" && (
+        <div className="flex flex-col sm:flex-row gap-3">
+          <div className="flex-1 space-y-1">
+            <label className="text-xs font-semibold text-slate-500 flex items-center gap-1.5"><Tag className="w-3.5 h-3.5" /> Document name *</label>
+            <input type="text" placeholder="e.g. Binge Xperience deal" value={nameQuery}
+              onChange={(e) => setNameQuery(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleNameSearch()}
+              className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-400/40 focus:border-violet-400 placeholder:text-slate-400" />
+          </div>
+          <div className="flex items-end">
+            <button onClick={handleNameSearch} disabled={!nameQuery.trim() || loading}
+              className="flex items-center gap-2 px-5 py-2.5 bg-violet-600 text-white font-semibold text-sm rounded-xl hover:bg-violet-700 disabled:opacity-50 transition-all h-[42px]">
+              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+              Search
+            </button>
+          </div>
+        </div>
+      )}
+
       {error && (
         <p className="text-sm text-red-500 flex items-center gap-2">
           <AlertTriangle className="w-4 h-4" /> {error}
@@ -725,6 +779,22 @@ function SearchPanel({ canWrite, showToast }: { canWrite: boolean; showToast: (m
       {/* Single result */}
       {singleResult && (
         <DocCard doc={singleResult.document} files={singleResult.files} canWrite={canWrite} onDeleteDoc={() => setDeleteDocId(singleResult.document.id)} />
+      )}
+
+      {/* Name search results */}
+      {nameResults && (
+        <div className="space-y-2">
+          {nameResults.length === 0 ? (
+            <div className="text-center py-10 bg-slate-50 rounded-xl border border-dashed border-slate-300">
+              <Search className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+              <p className="text-sm text-slate-500">No documents found with that name.</p>
+            </div>
+          ) : (
+            nameResults.map((doc) => (
+              <DocCard key={doc.id} doc={doc} files={null} canWrite={canWrite} onDeleteDoc={() => setDeleteDocId(doc.id)} />
+            ))
+          )}
+        </div>
       )}
 
       {/* Range results */}
@@ -778,6 +848,7 @@ function DocCard({
           <div className={`px-2.5 py-1 rounded-lg border text-xs font-bold font-mono ${info.bg} ${info.color}`}>{doc.docType}</div>
           <div>
             <p className="text-sm font-bold text-slate-800 font-mono">{doc.id}</p>
+            {doc.docName && <p className="text-xs text-violet-600 font-semibold mt-0.5">{doc.docName}</p>}
             <p className="text-xs text-slate-500">
               {doc.createdByUsername} · {fmtDate(doc.createdAt)} · {doc.fileCount} file{doc.fileCount !== 1 ? "s" : ""}
             </p>

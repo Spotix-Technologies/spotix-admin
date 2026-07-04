@@ -27,6 +27,20 @@ function fail(msg: string, status: number) {
   return NextResponse.json({ success: false, error: msg }, { status })
 }
 
+/** Best-effort delete of the underlying UploadThing file by its key. */
+async function deleteFromUploadThing(key: string): Promise<void> {
+  const token = process.env.UPLOADTHING_TOKEN
+  const secret = process.env.UPLOADTHING_SECRET
+  if (!token && !secret) return
+  try {
+    const mod = await import("uploadthing/server")
+    const utapi = new mod.UTApi({ token: token ?? secret })
+    await utapi.deleteFiles(key)
+  } catch (err) {
+    console.error("[documents/files] Failed to delete from UploadThing:", err)
+  }
+}
+
 // POST — register uploaded file
 export async function POST(
   req: NextRequest,
@@ -88,5 +102,8 @@ export async function DELETE(
   await fileRef.delete()
   await docRef.update({ fileCount: FieldValue.increment(-1) })
 
-  return ok({ message: "File deleted", storagePath: fileSnap.data()?.storagePath })
+  const storagePath = fileSnap.data()?.storagePath as string | undefined
+  if (storagePath) await deleteFromUploadThing(storagePath)
+
+  return ok({ message: "File deleted", storagePath })
 }

@@ -10,16 +10,20 @@
  * GET  /api/v1/documents?type=REQ&date=20260507&index=01
  *   → Single doc lookup by type + date + index (index defaults to 01)
  *
+ * GET  /api/v1/documents?name=Binge%20Xperience
+ *   → Name search: case-insensitive prefix match on the document's name
+ *
  * POST /api/v1/documents
- *   Body { docType: "REQ"|"MEM"|"MIN"|"DOC" }
- *   → Creates a new document with auto-generated reference ID
+ *   Body { docType: "REQ"|"MEM"|"MIN"|"DOC", name?: string }
+ *   → Creates a new document with auto-generated reference ID.
+ *     `name` is required for docType "DOC" so it can be searched later.
  *
  * DELETE /api/v1/documents?docId=SPTX-REQ-20260507-01
  *   → Deletes an entire document (metadata only — caller deletes files from storage)
  *
  * Access:
- *   - POST/DELETE: exec-assistant only
- *   - GET: admin + exec-assistant
+ *   - POST/DELETE: exec-assistant only (only they can create/remove documents)
+ *   - GET: any registered admin role (search/view only)
  */
 
 import { type NextRequest, NextResponse } from "next/server"
@@ -68,7 +72,9 @@ async function nextIndex(docType: DocType, dateStamp: string): Promise<string> {
 
 // ─── GET ──────────────────────────────────────────────────────────────────────
 export async function GET(req: NextRequest) {
-  const auth = await verifyAdminAccess(req, ["admin", "exec-assistant"])
+  // Any registered admin role may search/view documents. Only exec-assistant
+  // can create or upload (enforced in POST/DELETE and the files sub-route).
+  const auth = await verifyAdminAccess(req)
   if ("error" in auth) return auth.error
 
   const { searchParams } = new URL(req.url)
@@ -93,6 +99,21 @@ export async function GET(req: NextRequest) {
   const dateTo = searchParams.get("dateTo")
   const date = searchParams.get("date")
   const index = searchParams.get("index") ?? "01"
+  const name = searchParams.get("name")?.trim()
+
+  // Search by document name (all admin roles — case-insensitive prefix match)
+  if (name) {
+    const nameLower = name.toLowerCase()
+    let query = adminDb
+      .collection("documents")
+      .where("docNameLower", ">=", nameLower)
+      .where("docNameLower", "<", `${nameLower}\uf8ff`)
+      .limit(20)
+    if (type) query = query.where("docType", "==", type) as typeof query
+    const snap = await query.get()
+    const results = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+    return ok({ results })
+  }
 
   // Single doc lookup: type + date [+ index]
   if (type && date && !dateFrom && !dateTo) {
@@ -155,12 +176,15 @@ export async function POST(req: NextRequest) {
   const auth = await verifyAdminAccess(req, ["exec-assistant"])
   if ("error" in auth) return auth.error
 
-  let body: { docType?: string }
+  let body: { docType?: string; name?: string }
   try { body = await req.json() } catch { return fail("Invalid JSON", 400) }
 
-  const { docType } = body
+  const { docType, name } = body
   if (!docType || !["REQ", "MEM", "MIN", "DOC"].includes(docType)) {
     return fail("docType must be one of: REQ, MEM, MIN, DOC", 400)
+  }
+  if (docType === "DOC" && !name?.trim()) {
+    return fail("A name is required for 'Other' documents so it can be searched later", 400)
   }
 
   const dt = docType as DocType
@@ -173,6 +197,8 @@ export async function POST(req: NextRequest) {
     reference: docId,
     dateStamp: stamp,
     index: idx,
+    docName: name?.trim() || null,
+    docNameLower: name?.trim() ? name.trim().toLowerCase() : null,
     createdBy: auth.uid,
     createdByUsername: auth.username,
     createdAt: FieldValue.serverTimestamp(),

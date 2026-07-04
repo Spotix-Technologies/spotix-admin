@@ -2,12 +2,16 @@
 
 import { useState, useEffect } from "react"
 
+export type AdminRole = "admin" | "exec-assistant" | "customer-support" | "marketing" | "IT" | ""
+
 export interface AdminSession {
   uid: string
   username: string
   fullName: string
   profilePicture: string | null
   isAdmin: boolean
+  role: AdminRole
+  secondaryRoles: AdminRole[]
 }
 
 export function useAdminSession() {
@@ -27,6 +31,8 @@ export function useAdminSession() {
             fullName: data.fullName || "",
             profilePicture: data.profilePicture || null,
             isAdmin: data.isAdmin ?? false,
+            role: data.role || "",
+            secondaryRoles: data.secondaryRoles || [],
           })
         }
       })

@@ -59,6 +59,17 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: "Event not found", developer: DEV }, { status: 404 })
     }
 
+    // Only a full "admin" can edit listings posted by other admins.
+    // Non-"admin" roles may only edit listings they posted themselves.
+    const eventData = snap.data()!
+    const isOwner = eventData.postedByUid === admin.uid
+    if (admin.role !== "admin" && !isOwner) {
+      return NextResponse.json(
+        { error: "You can only edit events you posted yourself", developer: DEV },
+        { status: 403 }
+      )
+    }
+
     // Prevent overwriting system fields
     const { id: _id, postedByUid: _uid, createdAt: _ca, ...safeUpdates } = updates
     await ref.update({ ...safeUpdates, updatedAt: new Date().toISOString(), lastEditedBy: admin.username })
@@ -86,6 +97,16 @@ export async function DELETE(request: NextRequest) {
     const snap = await ref.get()
     if (!snap.exists) {
       return NextResponse.json({ error: "Event not found", developer: DEV }, { status: 404 })
+    }
+
+    // Same ownership rule as edits: only a full "admin" may delete other admins' listings.
+    const eventData = snap.data()!
+    const isOwner = eventData.postedByUid === admin.uid
+    if (admin.role !== "admin" && !isOwner) {
+      return NextResponse.json(
+        { error: "You can only delete events you posted yourself", developer: DEV },
+        { status: 403 }
+      )
     }
 
     // Archive before delete

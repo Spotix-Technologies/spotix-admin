@@ -9,7 +9,7 @@ import {
   Home, Receipt, CalendarDays, FileText, Vote,
   ShoppingBag, Wallet, Users, UserPlus, Download,
   Settings, LogOut, Loader2, ClipboardList,
-  SwitchCamera, FolderOpen, Globe,
+  SwitchCamera, FolderOpen, Globe, ShieldCheck,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -33,22 +33,25 @@ interface DashboardLayoutClientProps {
   children: React.ReactNode
 }
 
+// `roles: undefined` means every admin type can see the item.
+// Otherwise only the listed roles (checked against primary or secondary role) can.
 const menuItems = [
-  { id: "home",          label: "Home",          icon: Home,          href: "/admin-dashboard",                   active: true  },
+  { id: "home",          label: "Home",          icon: Home,          href: "/admin-dashboard",                   active: true,  roles: ["admin"] },
   { id: "references",   label: "References",   icon: Receipt,       href: "/admin-dashboard/references",        active: true  },
-  { id: "event-data",   label: "Event Data",   icon: CalendarDays,  href: "/admin-dashboard/event-data",        active: true  },
+  { id: "event-data",   label: "Event Data",   icon: CalendarDays,  href: "/admin-dashboard/event-data",        active: true,  roles: ["admin", "customer-support", "exec-assistant"] },
   { id: "upload-events",label: "Upload Events",icon: Globe,         href: "/admin-dashboard/upload-events",     active: true  },
-  { id: "users",        label: "Users",        icon: Users,         href: "/admin-dashboard/users",             active: true  },
-  { id: "tasks",      label: "Tasks",      icon: ClipboardList, href: "/admin-dashboard/tasks",      active: true  },
-  { id: "reports",    label: "Reports",    icon: FileText,      href: "/admin-dashboard/reports",    active: false },
-  { id: "votes",      label: "Votes",      icon: Vote,          href: "/admin-dashboard/votes",      active: false },
-  { id: "merch",      label: "Merch",      icon: ShoppingBag,   href: "/admin-dashboard/merch",      active: false },
-  { id: "payouts",    label: "Payouts",    icon: Wallet,        href: "/admin-dashboard/payouts",    active: false },
-  { id: "onboard",    label: "Onboard",    icon: UserPlus,      href: "/admin-dashboard/onboard",    active: true  },
-  { id: "export",     label: "Export",     icon: Download,      href: "/admin-dashboard/export",     active: false },
-  { id: "globals",    label: "Globals",    icon: Settings,      href: "/admin-dashboard/globals",    active: true  },
+  { id: "users",        label: "Users",        icon: Users,         href: "/admin-dashboard/users",             active: true,  roles: ["admin"] },
+  { id: "verification", label: "Verification", icon: ShieldCheck,   href: "/admin-dashboard/verification",      active: true,  roles: ["admin", "customer-support", "exec-assistant"] },
+  { id: "tasks",      label: "Tasks",      icon: ClipboardList, href: "/admin-dashboard/tasks",      active: true,  roles: ["admin"] },
+  { id: "reports",    label: "Reports",    icon: FileText,      href: "/admin-dashboard/reports",    active: false, roles: ["admin"] },
+  { id: "votes",      label: "Votes",      icon: Vote,          href: "/admin-dashboard/votes",      active: true  },
+  { id: "merch",      label: "Merch",      icon: ShoppingBag,   href: "/admin-dashboard/merch",      active: false, roles: ["admin"] },
+  { id: "payouts",    label: "Payouts",    icon: Wallet,        href: "/admin-dashboard/payouts",    active: false, roles: ["admin"] },
+  { id: "onboard",    label: "Onboard",    icon: UserPlus,      href: "/admin-dashboard/onboard",    active: true,  roles: ["admin"] },
+  { id: "export",     label: "Export",     icon: Download,      href: "/admin-dashboard/export",     active: false, roles: ["admin"] },
+  { id: "globals",    label: "Globals",    icon: Settings,      href: "/admin-dashboard/globals",    active: true,  roles: ["admin"] },
   { id: "documents",  label: "Documents",  icon: FolderOpen,    href: "/admin-dashboard/documents",  active: true  },
-]
+] as const
 
 const ROLE_DASHBOARD: Record<string, string> = {
   "exec-assistant":    "/exec-assistant-dashboard",
@@ -118,6 +121,14 @@ function SidebarInner({ user }: { user: User }) {
 
   const collapsed = desktopCollapsed
 
+  // Hide sidebar items the current admin isn't allowed to open at all
+  // (items with no `roles` list are visible to every admin type).
+  const visibleMenuItems = menuItems.filter((item) => {
+    const roles = (item as { roles?: readonly string[] }).roles
+    if (!roles) return true
+    return roles.includes(user.role) || user.secondaryRoles.some((r) => roles.includes(r))
+  })
+
   return (
     <Sidebar className="border-r border-gray-200">
       {/* ── Header ── */}
@@ -160,7 +171,7 @@ function SidebarInner({ user }: { user: User }) {
       {/* ── Nav items ── */}
       <SidebarContent className="p-1.5 md:p-2">
         <SidebarMenu>
-          {menuItems.map((item) => (
+          {visibleMenuItems.map((item) => (
             <SidebarMenuItem key={item.id}>
               <SidebarMenuButton
                 onClick={() => item.active && router.push(item.href)}

@@ -13,7 +13,9 @@ export default async function AdminDocumentsPage() {
   try {
     const decoded = await adminAuth.verifySessionCookie(sessionCookie, true)
     const adminDoc = await adminDb.collection("admins").doc(decoded.uid).get()
-    if (!adminDoc.exists || adminDoc.data()?.role !== "admin") redirect("/unauth")
+    // Any registered admin role can search documents here; only exec-assistant
+    // can create/upload (handled in their own dashboard).
+    if (!adminDoc.exists || !adminDoc.data()?.role) redirect("/unauth")
   } catch {
     redirect("/login")
   }

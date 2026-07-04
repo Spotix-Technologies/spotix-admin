@@ -1,12 +1,14 @@
 import { type Metadata } from "next"
 import { UsersClient } from "./user-client"
+import { requireFullAdmin } from "@/lib/require-admin-page"
 
 export const metadata: Metadata = {
   title: "Users | Spotix Admin Dashboard",
   description: "Search and manage user accounts, view tickets, payouts, and sessions",
 }
 
-export default function UsersPage() {
+export default async function UsersPage() {
+  await requireFullAdmin()
   return (
     <div className="space-y-6">
       <div>

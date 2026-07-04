@@ -11,11 +11,40 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 
+// Maps Firebase Auth (and our own API) error codes to friendly, non-technical messages.
+function friendlyAuthError(err: unknown): string {
+  const code: string =
+    (err as { code?: string })?.code ??
+    (err instanceof Error ? err.message : "") ??
+    ""
+
+  const map: Record<string, string> = {
+    "auth/invalid-credential": "Incorrect email or password. Please try again.",
+    "auth/invalid-email": "That email address doesn't look right. Please check and try again.",
+    "auth/user-not-found": "We couldn't find an account with that email.",
+    "auth/wrong-password": "Incorrect email or password. Please try again.",
+    "auth/too-many-requests": "Too many attempts. Please wait a moment and try again.",
+    "auth/user-disabled": "This account has been disabled. Please contact Spotix support.",
+    "auth/network-request-failed": "Network error. Please check your connection and try again.",
+    "auth/missing-password": "Please enter your password.",
+  }
+
+  if (map[code]) return map[code]
+
+  // Fall back to a generic message rather than surfacing raw Firebase/API errors
+  if (code.startsWith("auth/")) return "We couldn't sign you in. Please check your details and try again."
+  if (code === "Not an admin user") return "This account does not have admin access."
+  if (code === "User not found") return "We couldn't find an account with that email."
+
+  return "We couldn't sign you in. Please check your details and try again."
+}
+
 export default function LoginClient() {
   const router = useRouter()
   const [email, setEmail]       = useState("")
   const [password, setPassword] = useState("")
   const [error, setError]       = useState("")
+  const [success, setSuccess]   = useState(false)
   const [loading, setLoading]   = useState(false)
 
   const doLogin = async (idToken: string): Promise<{ ok: boolean; data: any }> => {
@@ -34,6 +63,7 @@ export default function LoginClient() {
     e.preventDefault()
     if (loading) return
     setError("")
+    setSuccess(false)
     setLoading(true)
 
     try {
@@ -52,15 +82,17 @@ export default function LoginClient() {
         data = retry.data
       }
 
-      if (!ok) throw new Error(data?.error || "Login failed")
+      if (!ok) throw { code: data?.code ?? data?.error ?? "Login failed" }
+
+      // Success — let the user know we're taking them to their dashboard
+      setSuccess(true)
 
       // Redirect based on role returned from server
       const dest: string = data.redirectTo || "/unauth"
       router.push(dest)
     } catch (err) {
       console.error(err)
-      setError(err instanceof Error ? err.message : "Login failed")
-    } finally {
+      setError(friendlyAuthError(err))
       setLoading(false)
     }
   }
@@ -89,8 +121,18 @@ export default function LoginClient() {
               <Input id="password" type="password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} required />
             </div>
             {error && <p className="text-red-400 text-sm text-center">{error}</p>}
+            {success && (
+              <p className="text-emerald-400 text-sm text-center flex items-center justify-center gap-2">
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                Login Successful, please hold while the dashboard loads…
+              </p>
+            )}
             <Button type="submit" disabled={loading} className="w-full py-3">
-              {loading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Signing in...</> : "Sign In"}
+              {success
+                ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Loading dashboard...</>
+                : loading
+                  ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Signing in...</>
+                  : "Sign In"}
             </Button>
           </form>
         </div>

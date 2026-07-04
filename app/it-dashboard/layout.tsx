@@ -13,7 +13,7 @@ export default async function Layout({ children }: { children: React.ReactNode }
       dashboardLabel="IT Dashboard"
       basePath="/it-dashboard"
       extraNavItems={[
-        { label: "Upload Events", href: "/admin-dashboard/upload-events", iconName: "Globe" },
+        { label: "Upload Events", href: "/it-dashboard/upload-events", iconName: "Globe" },
       ]}
     >
       {children}
