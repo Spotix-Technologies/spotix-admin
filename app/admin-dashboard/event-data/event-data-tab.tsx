@@ -8,6 +8,7 @@ import {
   Loader2, AlertCircle,
 } from "lucide-react"
 import AdminAttendeesTab from "./admin-attendees-tab"
+import PassesTab from "./passes-tab"
 
 interface TicketTier {
   policy: string
@@ -254,7 +255,7 @@ export default function EventDataTab({ eventData, onUpdate, onDeleted }: Props) 
   const [activeImage, setActiveImage] = useState(event.eventImage)
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null)
   const [saving, setSaving] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<"overview" | "attendees" | "payouts">("overview")
+  const [activeTab, setActiveTab] = useState<"overview" | "attendees" | "payouts" | "passes">("overview")
 
   const [flagModal, setFlagModal] = useState(false)
   const [flagReason, setFlagReason] = useState("")
@@ -400,7 +401,23 @@ export default function EventDataTab({ eventData, onUpdate, onDeleted }: Props) 
           <Wallet className="w-3.5 h-3.5" />
           Payouts
         </button>
+        <button
+          onClick={() => setActiveTab("passes")}
+          className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all flex items-center gap-1.5 ${
+            activeTab === "passes"
+              ? "bg-white text-[#6b2fa5] shadow-sm"
+              : "text-slate-500 hover:text-slate-700"
+          }`}
+        >
+          <Ticket className="w-3.5 h-3.5" />
+          Passes
+        </button>
       </div>
+
+      {/* Passes tab */}
+      {activeTab === "passes" && (
+        <PassesTab eventId={event.id} eventName={event.eventName} />
+      )}
 
       {/* Attendees tab */}
       {activeTab === "attendees" && (

@@ -9,7 +9,7 @@ import {
   Home, Receipt, CalendarDays, FileText, Vote,
   ShoppingBag, Wallet, Users, UserPlus, Download,
   Settings, LogOut, Loader2, ClipboardList,
-  SwitchCamera, FolderOpen, Globe, ShieldCheck,
+  SwitchCamera, FolderOpen, Globe, ShieldCheck, UserCheck,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -42,6 +42,7 @@ const menuItems = [
   { id: "upload-events",label: "Upload Events",icon: Globe,         href: "/admin-dashboard/upload-events",     active: true  },
   { id: "users",        label: "Users",        icon: Users,         href: "/admin-dashboard/users",             active: true,  roles: ["admin"] },
   { id: "verification", label: "Verification", icon: ShieldCheck,   href: "/admin-dashboard/verification",      active: true,  roles: ["admin", "customer-support", "exec-assistant"] },
+  { id: "agent-verification", label: "Agent Verification", icon: UserCheck, href: "/admin-dashboard/agent-verification", active: true, roles: ["admin", "customer-support"] },
   { id: "tasks",      label: "Tasks",      icon: ClipboardList, href: "/admin-dashboard/tasks",      active: true,  roles: ["admin"] },
   { id: "reports",    label: "Reports",    icon: FileText,      href: "/admin-dashboard/reports",    active: false, roles: ["admin"] },
   { id: "votes",      label: "Votes",      icon: Vote,          href: "/admin-dashboard/votes",      active: true  },

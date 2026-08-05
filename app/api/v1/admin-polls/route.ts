@@ -1,8 +1,19 @@
 /**
+ * GET  /api/v1/admin-polls?action=listRecent
+ *   Returns the 10 most recently created polls (voting collection).
+ *
+ * GET  /api/v1/admin-polls?action=search&term=xxx
+ *   Suggestions by exact pollId or pollName prefix (5+ chars), live polls only.
+ *
  * GET  /api/v1/admin-polls?pollId=xxx
  *   Looks up a poll by ID (checks the live "voting" collection first, then
  *   the "deletedPolls" archive so a soft-deleted poll can still be reviewed
  *   and restored). Any registered admin role may look up a poll.
+ *
+ * GET  /api/v1/admin-polls?pollId=xxx&action=payouts
+ *   Returns every payout request ever filed for this poll (any user),
+ *   newest first — mirrors the booker's own /api/polls/payout?action=status
+ *   but is not scoped to a single userId.
  *
  * POST /api/v1/admin-polls   { pollId, action }
  *   action: "flag" | "unflag" | "suspend" | "unsuspend" | "delete" | "restore"
@@ -21,22 +32,35 @@ function fail(error: string, status: number) {
   return NextResponse.json({ success: false, error, developer: DEV }, { status })
 }
 
-/** Recursively sum votes across a flat contestants[] or a categories[] tree. */
+interface LeaderboardEntry {
+  name: string
+  votes: number
+  image?: string
+  categoryName?: string
+}
+
+/**
+ * Recursively sum votes across a flat contestants[] (single polls) or a
+ * categories[] tree (group polls). For group polls, every entry is tagged
+ * with the name of the category (or "Parent > Child" for nested
+ * subcategories) it was pulled from.
+ */
 function computeStats(poll: Record<string, any>) {
   let totalVotes = 0
-  let leaderboard: { name: string; votes: number; image?: string }[] = []
+  const leaderboard: LeaderboardEntry[] = []
 
-  function walk(contestants: any[] = []) {
+  function walk(contestants: any[] = [], categoryName?: string) {
     for (const c of contestants) {
       totalVotes += c.votes ?? 0
-      leaderboard.push({ name: c.name, votes: c.votes ?? 0, image: c.image })
+      leaderboard.push({ name: c.name, votes: c.votes ?? 0, image: c.image, categoryName })
     }
   }
 
-  function walkCategories(cats: any[] = []) {
+  function walkCategories(cats: any[] = [], parentPath?: string) {
     for (const cat of cats) {
-      if (Array.isArray(cat.contestants) && cat.contestants.length > 0) walk(cat.contestants)
-      if (Array.isArray(cat.subcategories) && cat.subcategories.length > 0) walkCategories(cat.subcategories)
+      const path = parentPath ? `${parentPath} > ${cat.name}` : cat.name
+      if (Array.isArray(cat.contestants) && cat.contestants.length > 0) walk(cat.contestants, path)
+      if (Array.isArray(cat.subcategories) && cat.subcategories.length > 0) walkCategories(cat.subcategories, path)
     }
   }
 
@@ -47,14 +71,97 @@ function computeStats(poll: Record<string, any>) {
   return { totalVotes, leaderboard }
 }
 
+function summarizePoll(id: string, d: Record<string, any>) {
+  return {
+    pollId: id,
+    pollName: d.pollName || "Untitled",
+    pollImage: d.pollImage || "",
+    pollType: d.pollType || "single",
+    status: d.status || "active",
+    createdAt: d.createdAt?.toDate?.()?.toISOString() || null,
+  }
+}
+
 export async function GET(request: NextRequest) {
   const admin = await verifyAdminAccess(request)
   if ("error" in admin) return admin.error
 
   const { searchParams } = new URL(request.url)
+  const action = searchParams.get("action")
   const pollId = searchParams.get("pollId")?.trim()
+
+  /* RECENT POLLS */
+  if (action === "listRecent") {
+    const snap = await adminDb
+      .collection("voting")
+      .orderBy("createdAt", "desc")
+      .limit(10)
+      .get()
+
+    const results = snap.docs.map((doc) => summarizePoll(doc.id, doc.data()))
+    return ok({ data: results })
+  }
+
+  /* SEARCH SUGGESTIONS */
+  if (action === "search") {
+    const term = searchParams.get("term")?.trim()
+    if (!term || term.length < 5) return ok({ data: [] })
+
+    const results: ReturnType<typeof summarizePoll>[] = []
+
+    // Exact pollId lookup
+    const byId = await adminDb.collection("voting").doc(term).get()
+    if (byId.exists) results.push(summarizePoll(byId.id, byId.data()!))
+
+    // pollName prefix query
+    const nameSnap = await adminDb
+      .collection("voting")
+      .orderBy("pollName")
+      .startAt(term)
+      .endAt(term + "\uf8ff")
+      .limit(8)
+      .get()
+
+    for (const doc of nameSnap.docs) {
+      if (results.find((r) => r.pollId === doc.id)) continue
+      results.push(summarizePoll(doc.id, doc.data()))
+    }
+
+    return ok({ data: results.slice(0, 8) })
+  }
+
   if (!pollId) return fail("pollId is required", 400)
 
+  /* PAYOUT HISTORY */
+  if (action === "payouts") {
+    const snap = await adminDb.collection("payouts").where("pollId", "==", pollId).get()
+
+    const payouts = snap.docs
+      .map((doc) => {
+        const d = doc.data()
+        return {
+          id: doc.id,
+          pollId: d.pollId,
+          userId: d.userId,
+          date: d.date,
+          amount: d.amount ?? 0,
+          bankName: d.bankName || "",
+          bankCode: d.bankCode || "",
+          accountNumber: d.accountNumber || "",
+          accountName: d.accountName || "",
+          status: d.status || "pending",
+          createdAt: d.createdAt?.toDate?.()?.toISOString() ?? null,
+          updatedAt: d.updatedAt?.toDate?.()?.toISOString() ?? null,
+          pendingAt: d.pendingAt?.toDate?.()?.toISOString() ?? null,
+          processingAt: d.processingAt?.toDate?.()?.toISOString() ?? null,
+        }
+      })
+      .sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""))
+
+    return ok({ data: payouts })
+  }
+
+  /* SINGLE POLL LOOKUP */
   const liveSnap = await adminDb.collection("voting").doc(pollId).get()
   if (liveSnap.exists) {
     const poll = liveSnap.data()!

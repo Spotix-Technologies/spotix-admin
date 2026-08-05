@@ -1,16 +1,6 @@
-packages:
-  - .
-
 allowBuilds:
   '@firebase/util': true
+  core-js: true
   msgpackr-extract: true
   protobufjs: true
   sharp: true
-
-ignoredBuiltDependencies:
-  - sharp
-  - unrs-resolver
-
-onlyBuiltDependencies:
-  - '@firebase/util'
-  - protobufjs

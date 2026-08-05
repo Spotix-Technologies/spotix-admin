@@ -17,6 +17,7 @@ export default async function Layout({ children }: { children: React.ReactNode }
         { label: "Upload Events", href: "/customer-support-dashboard/upload-events", iconName: "Globe" },
         { label: "Event Data", href: "/customer-support-dashboard/event-data", iconName: "CalendarDays" },
         { label: "Verification", href: "/customer-support-dashboard/verification", iconName: "ShieldCheck" },
+        { label: "Agent Verification", href: "/customer-support-dashboard/agent-verification", iconName: "UserCheck" },
         { label: "Votes", href: "/customer-support-dashboard/votes", iconName: "Vote" },
       ]}
     >
