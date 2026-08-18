@@ -13,6 +13,7 @@ import {
   SidebarInset, SidebarTrigger, SidebarCollapseToggle, useSidebar,
 } from "@/components/ui/sidebar"
 import { Separator } from "@/components/ui/separator"
+import { getDicebearAvatarUrl } from "@/lib/dicebear"
 
 export interface RoleUser {
   uid: string
@@ -205,7 +206,7 @@ function SidebarInner({
               {user.profilePicture ? (
                 <Image src={user.profilePicture} alt={user.username} width={40} height={40} className="object-cover w-full h-full" />
               ) : (
-                <Image src="/TempUser.svg" alt="Default user" width={40} height={40} className="object-cover w-full h-full" />
+                <Image src={getDicebearAvatarUrl(user.uid, 40)} alt={user.username} width={40} height={40} className="object-cover w-full h-full" unoptimized />
               )}
             </div>
             <div className="flex-1 min-w-0">
@@ -219,7 +220,7 @@ function SidebarInner({
               {user.profilePicture ? (
                 <Image src={user.profilePicture} alt={user.username} width={32} height={32} className="object-cover w-full h-full" />
               ) : (
-                <Image src="/TempUser.svg" alt="Default user" width={32} height={32} className="object-cover w-full h-full" />
+                <Image src={getDicebearAvatarUrl(user.uid, 32)} alt={user.username} width={32} height={32} className="object-cover w-full h-full" unoptimized />
               )}
             </div>
           </div>

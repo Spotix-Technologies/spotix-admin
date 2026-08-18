@@ -236,6 +236,8 @@ export function EventDataClient() {
           eventData={eventData}
           onUpdate={(updated) => setEventData(updated)}
           onDeleted={handleBackToList}
+          adminUsername={session?.username ?? "Admin"}
+          canManagePayouts={session?.role === "admin"}
         />
       </div>
     )

@@ -9,6 +9,7 @@ import {
 } from "lucide-react"
 import AdminAttendeesTab from "./admin-attendees-tab"
 import PassesTab from "./passes-tab"
+import AdminEventPayoutsPanel from "@/components/payout/admin-event-payouts-panel"
 
 interface TicketTier {
   policy: string
@@ -58,6 +59,9 @@ interface Props {
   eventData: EventData
   onUpdate: (updated: EventData) => void
   onDeleted: () => void
+  adminUsername: string
+  /** Only the full "admin" role can record an admin-payout or revert one — see the panel component for why. */
+  canManagePayouts: boolean
 }
 
 /* ── Sub-components ── */
@@ -148,109 +152,8 @@ function ReasonTextarea({ value, onChange, placeholder }: { value: string; onCha
   )
 }
 
-/* ── Admin Payouts Tab ── */
-interface PayoutRecord {
-  payoutId: string
-  amount: number
-  status: string
-}
-
-const PAYOUT_STATUS: Record<string, { label: string; className: string }> = {
-  pending:    { label: "Pending",    className: "bg-amber-100 text-amber-700 border-amber-200" },
-  processing: { label: "Processing", className: "bg-blue-100 text-blue-700 border-blue-200" },
-  successful: { label: "Successful", className: "bg-emerald-100 text-emerald-700 border-emerald-200" },
-  failed:     { label: "Failed",     className: "bg-red-100 text-red-700 border-red-200" },
-}
-
-function AdminPayoutsTab({ eventId }: { eventId: string }) {
-  const [payouts, setPayouts] = useState<PayoutRecord[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    const load = async () => {
-      setLoading(true)
-      setError(null)
-      try {
-        const res = await fetch(`/api/v1/event-data/payouts?eventId=${eventId}`)
-        const json = await res.json()
-        if (!res.ok) throw new Error(json.error || "Failed to load payouts")
-        setPayouts(json.payouts || [])
-      } catch (e) {
-        setError(e instanceof Error ? e.message : "Failed to load payouts")
-      } finally {
-        setLoading(false)
-      }
-    }
-    load()
-  }, [eventId])
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <div className="text-center space-y-3">
-          <Loader2 className="w-6 h-6 animate-spin text-[#6b2fa5] mx-auto" />
-          <p className="text-sm text-slate-500">Loading payouts…</p>
-        </div>
-      </div>
-    )
-  }
-
-  if (error) {
-    return (
-      <div className="flex items-center justify-center py-16">
-        <div className="flex items-center gap-2.5 text-sm text-red-500">
-          <AlertCircle className="w-4 h-4 shrink-0" />
-          {error}
-        </div>
-      </div>
-    )
-  }
-
-  if (payouts.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center py-20 gap-3 text-slate-400">
-        <Wallet className="w-8 h-8 text-slate-300" />
-        <p className="text-sm">No payouts found for this event.</p>
-      </div>
-    )
-  }
-
-  return (
-    <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
-      <div className="overflow-x-auto">
-        <table className="w-full">
-          <thead className="bg-slate-50 border-b border-slate-200">
-            <tr>
-              <th className="px-5 py-3.5 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">Payout ID</th>
-              <th className="px-5 py-3.5 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">Amount</th>
-              <th className="px-5 py-3.5 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">Status</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {payouts.map((p) => {
-              const meta = PAYOUT_STATUS[p.status] ?? { label: p.status, className: "bg-slate-100 text-slate-600 border-slate-200" }
-              return (
-                <tr key={p.payoutId} className="hover:bg-slate-50 transition-colors">
-                  <td className="px-5 py-3.5 font-mono text-xs text-slate-700">{p.payoutId}</td>
-                  <td className="px-5 py-3.5 text-sm font-semibold text-slate-800">₦{Number(p.amount).toLocaleString()}</td>
-                  <td className="px-5 py-3.5">
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border ${meta.className}`}>
-                      {meta.label}
-                    </span>
-                  </td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  )
-}
-
 /* ── Main ── */
-export default function EventDataTab({ eventData, onUpdate, onDeleted }: Props) {
+export default function EventDataTab({ eventData, onUpdate, onDeleted, adminUsername, canManagePayouts }: Props) {
   const [event, setEvent] = useState(eventData)
   const [activeImage, setActiveImage] = useState(event.eventImage)
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null)
@@ -426,7 +329,7 @@ export default function EventDataTab({ eventData, onUpdate, onDeleted }: Props) 
 
       {/* Payouts tab */}
       {activeTab === "payouts" && (
-        <AdminPayoutsTab eventId={event.id} />
+        <AdminEventPayoutsPanel eventId={event.id} adminUsername={adminUsername} canManage={canManagePayouts} />
       )}
 
       {/* Overview tab */}

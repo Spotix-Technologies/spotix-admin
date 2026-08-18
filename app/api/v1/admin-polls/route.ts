@@ -11,9 +11,14 @@
  *   and restored). Any registered admin role may look up a poll.
  *
  * GET  /api/v1/admin-polls?pollId=xxx&action=payouts
- *   Returns every payout request ever filed for this poll (any user),
- *   newest first — mirrors the booker's own /api/polls/payout?action=status
- *   but is not scoped to a single userId.
+ *   Returns every payout ever filed for this poll (any user), newest
+ *   first — reads the Supabase `payouts` table (see
+ *   /supabase/payout-schema.sql), not Firestore.
+ *
+ * GET  /api/v1/admin-polls?pollId=xxx&action=transactions
+ *   Every per-day vote transaction record for this poll
+ *   (admin/votes/{pollId} in Firestore) — mirrors the booker's own
+ *   GET /api/polls/payout?action=list.
  *
  * POST /api/v1/admin-polls   { pollId, action }
  *   action: "flag" | "unflag" | "suspend" | "unsuspend" | "delete" | "restore"
@@ -22,6 +27,8 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { adminDb } from "@/lib/firebase-admin"
 import { verifyAdminAccess } from "@/lib/verify-admin"
+import { getPayoutsForPoll } from "@/lib/payout-admin-db"
+import { listPollTransactions } from "@/lib/payout-firestore-admin"
 
 const DEV = "API developed and maintained by Spotix Technologies"
 
@@ -132,30 +139,37 @@ export async function GET(request: NextRequest) {
 
   if (!pollId) return fail("pollId is required", 400)
 
-  /* PAYOUT HISTORY */
-  if (action === "payouts") {
-    const snap = await adminDb.collection("payouts").where("pollId", "==", pollId).get()
+  /* TRANSACTIONS (per-day vote records) */
+  if (action === "transactions") {
+    const transactions = await listPollTransactions(pollId)
+    return ok({ data: transactions })
+  }
 
-    const payouts = snap.docs
-      .map((doc) => {
-        const d = doc.data()
-        return {
-          id: doc.id,
-          pollId: d.pollId,
-          userId: d.userId,
-          date: d.date,
-          amount: d.amount ?? 0,
-          bankName: d.bankName || "",
-          bankCode: d.bankCode || "",
-          accountNumber: d.accountNumber || "",
-          accountName: d.accountName || "",
-          status: d.status || "pending",
-          createdAt: d.createdAt?.toDate?.()?.toISOString() ?? null,
-          updatedAt: d.updatedAt?.toDate?.()?.toISOString() ?? null,
-          pendingAt: d.pendingAt?.toDate?.()?.toISOString() ?? null,
-          processingAt: d.processingAt?.toDate?.()?.toISOString() ?? null,
-        }
-      })
+  /* PAYOUT HISTORY — Supabase-backed */
+  if (action === "payouts") {
+    const rows = await getPayoutsForPoll(pollId)
+    const payouts = rows
+      .map((r) => ({
+        reference: r.reference,
+        pollId: r.poll_id,
+        userId: r.user_id,
+        date: r.pay_date,
+        amount: r.amount,
+        bankName: r.bank_name,
+        bankCode: r.bank_code,
+        accountNumber: r.account_number,
+        accountName: r.account_name,
+        status: r.status,
+        failureReason: r.failure_reason,
+        narration: r.narration,
+        // See event-side payouts route for the backward-compat contract
+        // on this field — absent/false means booker-initiated, as always.
+        adminInitiated: r.admin_initiated === true,
+        adminInitiatedByName: r.admin_initiated_by_name ?? null,
+        durationSeconds: r.duration_seconds,
+        createdAt: r.created_at,
+        resolvedAt: r.resolved_at,
+      }))
       .sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""))
 
     return ok({ data: payouts })

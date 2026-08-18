@@ -1,11 +1,13 @@
 "use client"
 
 import { useState, useEffect, useRef, useCallback } from "react"
+import { useAdminSession } from "@/hooks/use-admin-session"
+import AdminPollPayoutsPanel from "@/components/payout/admin-poll-payouts-panel"
 import {
   Search, Loader2, AlertCircle, CheckCircle, Flag, ShieldAlert,
   ShieldCheck, Trash2, RotateCcw, Trophy, Users, Wallet, Calendar,
   ImageIcon, X, ChevronRight, RefreshCw, Vote, ReceiptText, Tag,
-  ArrowLeft, ChevronDown, Clock, XCircle, CheckCircle2, Loader,
+  ArrowLeft, ChevronDown,
 } from "lucide-react"
 
 /* ─────────────────────────────────────────────
@@ -58,25 +60,6 @@ interface Stats {
   leaderboard: LeaderboardEntry[]
 }
 
-type PayoutStatus = "pending" | "processing" | "failed" | "successful"
-
-interface PayoutRecord {
-  id: string
-  pollId: string
-  userId: string
-  date: string
-  amount: number
-  bankName: string
-  bankCode: string
-  accountNumber: string
-  accountName: string
-  status: PayoutStatus
-  createdAt: string | null
-  updatedAt: string | null
-  pendingAt: string | null
-  processingAt: string | null
-}
-
 type Action = "flag" | "unflag" | "suspend" | "unsuspend" | "delete" | "restore"
 type Tab = "overview" | "entries" | "payouts"
 
@@ -84,13 +67,6 @@ const STATUS_PILL: Record<string, string> = {
   active: "bg-emerald-100 text-emerald-700 border-emerald-200",
   suspended: "bg-red-100 text-red-700 border-red-200",
   ended: "bg-gray-100 text-gray-600 border-gray-200",
-}
-
-const PAYOUT_STATUS_CONFIG: Record<PayoutStatus, { label: string; bg: string; text: string; border: string; icon: React.ReactNode }> = {
-  pending: { label: "Pending", bg: "bg-amber-50", text: "text-amber-700", border: "border-amber-200", icon: <Clock className="w-3 h-3" /> },
-  processing: { label: "Processing", bg: "bg-blue-50", text: "text-blue-700", border: "border-blue-200", icon: <Loader className="w-3 h-3 animate-spin" /> },
-  failed: { label: "Failed", bg: "bg-red-50", text: "text-red-700", border: "border-red-200", icon: <XCircle className="w-3 h-3" /> },
-  successful: { label: "Successful", bg: "bg-green-50", text: "text-green-700", border: "border-green-200", icon: <CheckCircle2 className="w-3 h-3" /> },
 }
 
 const ENTRIES_PAGE_SIZE = 10
@@ -124,11 +100,7 @@ export function VotesClient() {
   const [tab, setTab] = useState<Tab>("overview")
   const [visibleEntries, setVisibleEntries] = useState(ENTRIES_PAGE_SIZE)
 
-  /* ── Payouts tab ── */
-  const [payouts, setPayouts] = useState<PayoutRecord[]>([])
-  const [payoutsLoaded, setPayoutsLoaded] = useState(false)
-  const [payoutsLoading, setPayoutsLoading] = useState(false)
-  const [payoutsError, setPayoutsError] = useState<string | null>(null)
+  const { session } = useAdminSession()
 
   const showToast = (msg: string, type: "success" | "error") => {
     setToast({ msg, type })
@@ -193,8 +165,6 @@ export function VotesClient() {
     setViewState("detail")
     setTab("overview")
     setVisibleEntries(ENTRIES_PAGE_SIZE)
-    setPayoutsLoaded(false)
-    setPayouts([])
     setLoading(true); setError(null); setPoll(null); setStats(null); setConfirmDelete(false)
     try {
       const res = await fetch(`/api/v1/admin-polls?pollId=${encodeURIComponent(targetId)}`)
@@ -239,26 +209,10 @@ export function VotesClient() {
     }
   }
 
-  /* ── Payout history (lazy-loaded on tab switch) ── */
-  const fetchPayouts = useCallback(async () => {
-    setPayoutsLoading(true)
-    setPayoutsError(null)
-    try {
-      const res = await fetch(`/api/v1/admin-polls?pollId=${encodeURIComponent(pollId)}&action=payouts`)
-      const json = await res.json()
-      if (!res.ok) throw new Error(json.error || "Failed to load payout history")
-      setPayouts(json.data || [])
-      setPayoutsLoaded(true)
-    } catch (e) {
-      setPayoutsError(e instanceof Error ? e.message : "Failed to load payout history")
-    } finally {
-      setPayoutsLoading(false)
-    }
-  }, [pollId])
-
-  useEffect(() => {
-    if (tab === "payouts" && !payoutsLoaded && !payoutsLoading) fetchPayouts()
-  }, [tab, payoutsLoaded, payoutsLoading, fetchPayouts])
+  /* ── Payout history now lives entirely inside AdminPollPayoutsPanel
+     (rendered directly from the "payouts" tab below) — it fetches its
+     own transactions + payout history on mount, so there's nothing to
+     lazy-load here anymore. */
 
   /* ═══════════════════════════════════════════
      LIST VIEW
@@ -528,6 +482,23 @@ export function VotesClient() {
                   <StatCard icon={<Trophy className="w-4 h-4" />} label="Type" value={poll.pollType === "group" ? "Group" : "Single"} />
                 </div>
 
+                {/* Withdrawn vs. remaining — totalPaidOut only reflects
+                    "successful" payouts (see the analytics batch in
+                    spotix-backend/v1/payout.js and, for admin-initiated
+                    ones, lib/payout-firestore-admin.ts) */}
+                <div className="grid grid-cols-2 gap-2">
+                  <StatCard
+                    icon={<Wallet className="w-4 h-4" />}
+                    label="Withdrawn"
+                    value={`₦${Number(poll.totalPaidOut ?? 0).toLocaleString("en-NG")}`}
+                  />
+                  <StatCard
+                    icon={<Wallet className="w-4 h-4" />}
+                    label="Remaining"
+                    value={`₦${Math.max(0, Number(poll.pollAmount ?? 0) - Number(poll.totalPaidOut ?? 0)).toLocaleString("en-NG")}`}
+                  />
+                </div>
+
                 {(poll.pollStartDate || poll.pollEndDate) && (
                   <div className="flex items-center gap-2 text-xs text-gray-500">
                     <Calendar className="w-3.5 h-3.5" />
@@ -672,67 +643,7 @@ export function VotesClient() {
 
             {/* ── Payouts tab ── */}
             {tab === "payouts" && (
-              <div className="space-y-3">
-                {payoutsLoading ? (
-                  <div className="flex items-center justify-center py-14">
-                    <div className="text-center space-y-3">
-                      <Loader2 className="w-6 h-6 animate-spin text-violet-500 mx-auto" />
-                      <p className="text-sm text-gray-400">Loading payout history…</p>
-                    </div>
-                  </div>
-                ) : payoutsError ? (
-                  <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-center">
-                    <p className="text-sm text-red-600">{payoutsError}</p>
-                    <button onClick={fetchPayouts} className="text-xs text-red-600 underline mt-2 font-medium">Try again</button>
-                  </div>
-                ) : payouts.length === 0 ? (
-                  <div className="bg-slate-50 border border-slate-200 rounded-xl p-8 text-center">
-                    <ReceiptText className="w-7 h-7 text-slate-300 mx-auto mb-2" />
-                    <p className="text-sm text-gray-600 font-semibold">No payout requests yet</p>
-                    <p className="text-xs text-gray-400 mt-1">Payout requests filed by the poll owner will appear here.</p>
-                  </div>
-                ) : (
-                  <>
-                    <div className="flex items-center justify-between">
-                      <p className="text-xs font-semibold text-gray-500">
-                        {payouts.length} payout request{payouts.length !== 1 ? "s" : ""}
-                      </p>
-                      <button
-                        onClick={fetchPayouts}
-                        className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-violet-600 transition-colors"
-                      >
-                        <RefreshCw className="w-3 h-3" /> Refresh
-                      </button>
-                    </div>
-                    <div className="space-y-2.5">
-                      {payouts.map((p) => {
-                        const cfg = PAYOUT_STATUS_CONFIG[p.status] || PAYOUT_STATUS_CONFIG.pending
-                        return (
-                          <div key={p.id} className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-1.5">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className="font-bold text-gray-900 text-sm">{p.date}</span>
-                              <span className={`inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-semibold border ${cfg.bg} ${cfg.text} ${cfg.border}`}>
-                                {cfg.icon}
-                                {cfg.label}
-                              </span>
-                            </div>
-                            <div className="flex flex-wrap gap-3 text-xs text-gray-600">
-                              <span>Amount: <span className="font-semibold text-gray-800">₦{Number(p.amount).toLocaleString("en-NG")}</span></span>
-                              <span>Bank: <span className="font-semibold text-gray-800">{p.bankName}</span></span>
-                            </div>
-                            <p className="text-[11px] text-gray-400">
-                              {p.accountName} · •••• {p.accountNumber.slice(-4)}
-                            </p>
-                            {p.createdAt && (
-                              <p className="text-[11px] text-gray-400">Submitted: {new Date(p.createdAt).toLocaleString("en-NG")}</p>
-                            )}
-                          </div>
-                        )
-                      })}
-                    </div>
-                  </>
-                )}
-              </div>
+              <AdminPollPayoutsPanel pollId={pollId} adminUsername={session?.username ?? "Admin"} canManage={session?.role === "admin"} />
             )}
           </div>
         </div>
