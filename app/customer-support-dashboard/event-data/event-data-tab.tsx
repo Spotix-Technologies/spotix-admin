@@ -9,6 +9,7 @@ import {
 } from "lucide-react"
 import AdminAttendeesTab from "./admin-attendees-tab"
 import PassesTab from "./passes-tab"
+import ReferralsTab from "./referrals-tab"
 import AdminEventPayoutsPanel from "@/components/payout/admin-event-payouts-panel"
 
 interface TicketTier {
@@ -62,6 +63,12 @@ interface Props {
   adminUsername: string
   /** Only the full "admin" role can record an admin-payout or revert one — see the panel component for why. */
   canManagePayouts: boolean
+  /** Only the full "admin" role can flag/deactivate/suspend/delete an event —
+   *  the API routes behind these actions (PATCH/DELETE /api/v1/event-data,
+   *  POST /api/v1/event-data/deleted) are admin-only. customer-support and
+   *  exec-assistant are view-only here, so the Dangerous Zone is hidden
+   *  entirely for them instead of showing buttons that would just 403. */
+  canModerate: boolean
 }
 
 /* ── Sub-components ── */
@@ -153,12 +160,12 @@ function ReasonTextarea({ value, onChange, placeholder }: { value: string; onCha
 }
 
 /* ── Main ── */
-export default function EventDataTab({ eventData, onUpdate, onDeleted, adminUsername, canManagePayouts }: Props) {
+export default function EventDataTab({ eventData, onUpdate, onDeleted, adminUsername, canManagePayouts, canModerate }: Props) {
   const [event, setEvent] = useState(eventData)
   const [activeImage, setActiveImage] = useState(event.eventImage)
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null)
   const [saving, setSaving] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<"overview" | "attendees" | "payouts" | "passes">("overview")
+  const [activeTab, setActiveTab] = useState<"overview" | "attendees" | "payouts" | "passes" | "referrals">("overview")
 
   const [flagModal, setFlagModal] = useState(false)
   const [flagReason, setFlagReason] = useState("")
@@ -315,7 +322,23 @@ export default function EventDataTab({ eventData, onUpdate, onDeleted, adminUser
           <Ticket className="w-3.5 h-3.5" />
           Passes
         </button>
+        <button
+          onClick={() => setActiveTab("referrals")}
+          className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all flex items-center gap-1.5 ${
+            activeTab === "referrals"
+              ? "bg-white text-[#6b2fa5] shadow-sm"
+              : "text-slate-500 hover:text-slate-700"
+          }`}
+        >
+          <Tag className="w-3.5 h-3.5" />
+          Referrals
+        </button>
       </div>
+
+      {/* Referrals tab */}
+      {activeTab === "referrals" && (
+        <ReferralsTab eventId={event.id} />
+      )}
 
       {/* Passes tab */}
       {activeTab === "passes" && (
@@ -480,6 +503,7 @@ export default function EventDataTab({ eventData, onUpdate, onDeleted, adminUser
       </div>
 
       {/* ── DANGEROUS ZONE ── */}
+      {canModerate && (
       <div className="rounded-2xl border border-red-200 bg-red-50/50 overflow-hidden">
         <div className="px-5 py-4 border-b border-red-200 bg-red-50 flex items-center gap-2.5">
           <div className="w-7 h-7 rounded-lg bg-red-100 border border-red-200 flex items-center justify-center">
@@ -595,6 +619,7 @@ export default function EventDataTab({ eventData, onUpdate, onDeleted, adminUser
 
         </div>
       </div>
+      )}
 
       {/* ── MODALS ── */}
 

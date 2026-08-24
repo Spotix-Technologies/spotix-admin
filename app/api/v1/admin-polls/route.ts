@@ -195,7 +195,10 @@ const VALID_ACTIONS = ["flag", "unflag", "suspend", "unsuspend", "delete", "rest
 type Action = (typeof VALID_ACTIONS)[number]
 
 export async function POST(request: NextRequest) {
-  const admin = await verifyAdminAccess(request)
+  // flag/unflag/suspend/unsuspend/delete/restore all change a poll's
+  // account-facing stats/visibility — restricted to full admins only.
+  // customer-support and exec-assistant keep read access via GET above.
+  const admin = await verifyAdminAccess(request, ["admin"])
   if ("error" in admin) return admin.error
 
   let body: { pollId?: string; action?: string }

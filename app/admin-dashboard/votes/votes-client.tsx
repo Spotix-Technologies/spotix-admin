@@ -3,11 +3,12 @@
 import { useState, useEffect, useRef, useCallback } from "react"
 import { useAdminSession } from "@/hooks/use-admin-session"
 import AdminPollPayoutsPanel from "@/components/payout/admin-poll-payouts-panel"
+import PollLimitsPanel from "@/components/votes/poll-limits-panel"
 import {
   Search, Loader2, AlertCircle, CheckCircle, Flag, ShieldAlert,
   ShieldCheck, Trash2, RotateCcw, Trophy, Users, Wallet, Calendar,
   ImageIcon, X, ChevronRight, RefreshCw, Vote, ReceiptText, Tag,
-  ArrowLeft, ChevronDown,
+  ArrowLeft, ChevronDown, Settings2,
 } from "lucide-react"
 
 /* ─────────────────────────────────────────────
@@ -61,7 +62,7 @@ interface Stats {
 }
 
 type Action = "flag" | "unflag" | "suspend" | "unsuspend" | "delete" | "restore"
-type Tab = "overview" | "entries" | "payouts"
+type Tab = "overview" | "entries" | "payouts" | "limits"
 
 const STATUS_PILL: Record<string, string> = {
   active: "bg-emerald-100 text-emerald-700 border-emerald-200",
@@ -471,6 +472,7 @@ export function VotesClient() {
                 count={stats.leaderboard.length}
               />
               <TabButton active={tab === "payouts"} onClick={() => setTab("payouts")} icon={<ReceiptText className="w-3.5 h-3.5" />} label="Payouts" />
+              <TabButton active={tab === "limits"} onClick={() => setTab("limits")} icon={<Settings2 className="w-3.5 h-3.5" />} label="Limits" />
             </div>
 
             {/* ── Overview tab ── */}
@@ -535,7 +537,11 @@ export function VotesClient() {
                 )}
 
                 <div className="flex flex-wrap gap-2 pt-2 border-t border-slate-100">
-                  {deleted ? (
+                  {session?.role !== "admin" ? (
+                    <p className="text-xs text-gray-400">
+                      Flagging, suspending, and deleting polls is restricted to full admins. You have view-only access here.
+                    </p>
+                  ) : deleted ? (
                     <ActionButton
                       onClick={() => handleAction("restore")}
                       loading={acting === "restore"}
@@ -644,6 +650,16 @@ export function VotesClient() {
             {/* ── Payouts tab ── */}
             {tab === "payouts" && (
               <AdminPollPayoutsPanel pollId={pollId} adminUsername={session?.username ?? "Admin"} canManage={session?.role === "admin"} />
+            )}
+
+            {/* ── Limits & categories tab ── */}
+            {tab === "limits" && (
+              <PollLimitsPanel
+                pollId={pollId}
+                pollType={poll.pollType}
+                apiBase="admin-polls"
+                canEditLimits={session?.role === "admin"}
+              />
             )}
           </div>
         </div>

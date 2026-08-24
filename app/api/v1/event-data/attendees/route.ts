@@ -5,7 +5,9 @@
  *   → Returns full attendee list for an event (id, fullName, email,
  *     ticketType, verified, purchaseDate, ticketReference, faceEmbedding)
  *
- * Access: admin + exec-assistant
+ * Access: admin only. customer-support and exec-assistant now call their
+ * own separate route, /api/v1/support-event-data/attendees, instead of
+ * this one — see that file for why.
  */
 
 import { type NextRequest, NextResponse } from "next/server"
@@ -26,7 +28,7 @@ function tsToDateString(ts: FirebaseFirestore.Timestamp | string | null | undefi
 }
 
 export async function GET(req: NextRequest) {
-  const auth = await verifyAdminAccess(req, ["admin", "exec-assistant"])
+  const auth = await verifyAdminAccess(req, ["admin"])
   if ("error" in auth) return auth.error
 
   const { searchParams } = new URL(req.url)

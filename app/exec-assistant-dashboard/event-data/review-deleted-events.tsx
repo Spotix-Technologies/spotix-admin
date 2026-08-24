@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { RotateCcw, Trash2, Clock, User, AlertTriangle, X, CheckCircle, RefreshCw } from "lucide-react"
+import { useAdminSession } from "@/hooks/use-admin-session"
 
 interface DeletedEvent {
   eventId: string
@@ -15,6 +16,12 @@ interface DeletedEvent {
 }
 
 export default function ReviewDeletedEvents() {
+  // Restoring is admin-only server-side (POST /api/v1/event-data/deleted) —
+  // customer-support and exec-assistant can review what's been deleted and
+  // why, but the Restore button/modal below is hidden for them so it
+  // doesn't just 403 on click.
+  const { session } = useAdminSession()
+  const canRestore = session?.role === "admin"
   const [events, setEvents] = useState<DeletedEvent[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -158,6 +165,7 @@ export default function ReviewDeletedEvents() {
                   )}
                 </div>
 
+                {canRestore && (
                 <button
                   onClick={() => setConfirmRestore(event)}
                   disabled={restoring === event.eventId}
@@ -166,6 +174,7 @@ export default function ReviewDeletedEvents() {
                   <RotateCcw className={`w-3.5 h-3.5 ${restoring === event.eventId ? "animate-spin" : ""}`} />
                   {restoring === event.eventId ? "Restoring…" : "Restore"}
                 </button>
+                )}
               </div>
             </div>
           ))}
@@ -173,7 +182,7 @@ export default function ReviewDeletedEvents() {
       )}
 
       {/* Confirm restore modal */}
-      {confirmRestore && (
+      {canRestore && confirmRestore && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4" style={{ isolation: "isolate" }}>
           <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setConfirmRestore(null)} />
           <div className="relative z-10 w-full max-w-md bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden">

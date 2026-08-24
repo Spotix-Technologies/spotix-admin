@@ -179,8 +179,10 @@ export async function GET(request: NextRequest) {
 ───────────────────────────────────────────── */
 export async function PATCH(request: NextRequest) {
   try {
-    // Verify admin access
-    const adminResult = await verifyAdminAccess(request)
+    // flag/setStatus/suspend all modify the event's account-facing stats —
+    // restricted to full admins only. customer-support and exec-assistant
+    // keep read access via GET above.
+    const adminResult = await verifyAdminAccess(request, ["admin"])
     if ("error" in adminResult) {
       const response = adminResult.error as NextResponse
       const json = await response.json() as any
@@ -251,8 +253,8 @@ export async function PATCH(request: NextRequest) {
 ───────────────────────────────────────────── */
 export async function DELETE(request: NextRequest) {
   try {
-    // Verify admin access
-    const adminResult = await verifyAdminAccess(request)
+    // Soft-deleting an event is an account-modifying action — admin only.
+    const adminResult = await verifyAdminAccess(request, ["admin"])
     if ("error" in adminResult) {
       const response = adminResult.error as NextResponse
       const json = await response.json() as any

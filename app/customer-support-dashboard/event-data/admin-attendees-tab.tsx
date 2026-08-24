@@ -350,7 +350,11 @@ export default function AdminAttendeesTab({ eventId, eventName }: Props) {
       setLoading(true)
       setError(null)
       try {
-        const res = await fetch(`/api/v1/event-data/attendees?eventId=${eventId}`)
+        // Customer-support/exec-assistant call their own attendees route,
+        // separate from the admin dashboard's — see that route's header
+        // comment for why. Previously this pointed at the admin-only
+        // route, which meant this tab always came back 403 here.
+        const res = await fetch(`/api/v1/support-event-data/attendees?eventId=${eventId}`)
         const json = await res.json()
         if (!res.ok) throw new Error(json.error || "Failed to load attendees")
         setAttendees(json.attendees || [])

@@ -19,9 +19,28 @@
 import { useState, useEffect, useCallback } from "react"
 import {
   Wallet, Loader2, AlertCircle, Clock, XCircle, CheckCircle2,
-  ChevronRight, ShieldAlert, RotateCcw, X, Lock,
+  ChevronRight, ShieldAlert, RotateCcw, X, Lock, KeyRound, ShieldCheck,
 } from "lucide-react"
 import { AdminPayDialog, RevertDialog } from "./admin-payout-dialogs"
+
+interface VaultSignOff {
+  uid: string
+  signed: boolean
+  signedAt: string | null
+}
+
+interface VaultHoldSummary {
+  id: string
+  date: string
+  amount: number
+  status: string
+  initiatedByName: string
+  initiatedByEmail: string
+  signOffs: VaultSignOff[]
+  signedCount: number
+  totalParticipants: number
+  releasedReference: string | null
+}
 
 interface TxnRecord {
   date: string
@@ -60,6 +79,7 @@ export default function AdminEventPayoutsPanel({
 }: { eventId: string; adminUsername: string; canManage: boolean }) {
   const [transactions, setTransactions] = useState<TxnRecord[]>([])
   const [payouts, setPayouts] = useState<PayoutRecord[]>([])
+  const [vaultHolds, setVaultHolds] = useState<VaultHoldSummary[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -80,12 +100,26 @@ export default function AdminEventPayoutsPanel({
       if (!poRes.ok) throw new Error(poJson.error || "Failed to load payouts")
       setTransactions(txJson.transactions ?? [])
       setPayouts(poJson.payouts ?? [])
+
+      // Vault sign-off status is admin-only — the route itself 403s for
+      // any other role, so only bother fetching it when this panel is
+      // rendered with canManage (i.e. on the admin dashboard). A failure
+      // here is non-fatal to the rest of the panel.
+      if (canManage) {
+        try {
+          const vRes = await fetch(`/api/v1/event-data/vault-status?eventId=${eventId}`)
+          const vJson = await vRes.json()
+          if (vRes.ok) setVaultHolds(vJson.holds ?? [])
+        } catch {
+          // Non-fatal
+        }
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load payout data")
     } finally {
       setLoading(false)
     }
-  }, [eventId])
+  }, [eventId, canManage])
 
   useEffect(() => { load() }, [load])
 
@@ -243,6 +277,54 @@ export default function AdminEventPayoutsPanel({
           </div>
         )}
       </div>
+      {/* ── Vault sign-offs (admin only) ── */}
+      {canManage && vaultHolds.length > 0 && (
+        <div>
+          <h3 className="text-sm font-bold text-slate-700 mb-3 flex items-center gap-1.5">
+            <Lock className="w-3.5 h-3.5" /> Vault Sign-offs
+          </h3>
+          <div className="space-y-2">
+            {vaultHolds.map((h) => (
+              <div key={h.id} className="bg-white border border-purple-200 rounded-xl p-4 space-y-2">
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <div>
+                    <p className="text-sm font-bold text-slate-800">{h.date}</p>
+                    <p className="text-xs text-slate-500">
+                      ₦{Number(h.amount).toLocaleString()} · requested by {h.initiatedByName}
+                    </p>
+                  </div>
+                  <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-semibold border ${
+                    h.status === "vault_pending"
+                      ? "bg-amber-50 text-amber-700 border-amber-200"
+                      : h.status === "released" || h.status === "successful"
+                      ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                      : "bg-red-50 text-red-700 border-red-200"
+                  }`}>
+                    {h.status === "vault_pending" ? <Clock className="w-3 h-3" /> : h.status === "released" || h.status === "successful" ? <CheckCircle2 className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
+                    {h.status} · {h.signedCount}/{h.totalParticipants} signed
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {h.signOffs.map((s) => (
+                    <span
+                      key={s.uid}
+                      title={s.signedAt ? `Signed ${new Date(s.signedAt).toLocaleString()}` : "Not yet signed"}
+                      className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full font-medium border ${
+                        s.signed
+                          ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                          : "bg-slate-50 text-slate-400 border-slate-200"
+                      }`}
+                    >
+                      {s.signed ? <ShieldCheck className="w-3 h-3" /> : <KeyRound className="w-3 h-3" />}
+                      {s.uid.slice(0, 8)}…
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

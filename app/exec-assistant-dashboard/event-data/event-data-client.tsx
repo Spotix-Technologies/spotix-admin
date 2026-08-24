@@ -238,6 +238,7 @@ export function EventDataClient() {
           onDeleted={handleBackToList}
           adminUsername={session?.username ?? "Admin"}
           canManagePayouts={session?.role === "admin"}
+          canModerate={session?.role === "admin"}
         />
       </div>
     )

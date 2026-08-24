@@ -51,8 +51,8 @@ export async function GET(request: NextRequest) {
 /* POST — restore a deleted event back to events/ */
 export async function POST(request: NextRequest) {
   try {
-    // Verify admin access
-    const adminResult = await verifyAdminAccess(request)
+    // Restoring a deleted event is an account-modifying action — admin only.
+    const adminResult = await verifyAdminAccess(request, ["admin"])
     if ("error" in adminResult) {
       const response = adminResult.error as NextResponse
       const json = await response.json() as any
