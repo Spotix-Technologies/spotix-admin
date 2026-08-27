@@ -49,6 +49,8 @@ interface EventData {
   affiliateName: string | null
   allowAgents: boolean
   enabledCollaboration: boolean
+  virtualQueueEnabled: boolean
+  queueBatchSize: number
   hasStopDate: boolean
   stopDate: string | null
   createdAt: string | null
@@ -239,6 +241,7 @@ export function EventDataClient() {
           adminUsername={session?.username ?? "Admin"}
           canManagePayouts={session?.role === "admin"}
           canModerate={session?.role === "admin"}
+          canMatchReferrals={session?.role === "admin" || session?.role === "customer-support"}
         />
       </div>
     )

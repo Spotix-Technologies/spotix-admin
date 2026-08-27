@@ -48,6 +48,8 @@ interface EventData {
   affiliateId: string | null
   affiliateName: string | null
   allowAgents: boolean
+  virtualQueueEnabled: boolean
+  queueBatchSize: number
   enabledCollaboration: boolean
   hasStopDate: boolean
   stopDate: string | null
@@ -69,6 +71,8 @@ interface Props {
    *  exec-assistant are view-only here, so the Dangerous Zone is hidden
    *  entirely for them instead of showing buttons that would just 403. */
   canModerate: boolean
+  /** Admin + customer-support can manually match a referral-less attendee to a referral code. */
+  canMatchReferrals: boolean
 }
 
 /* ── Sub-components ── */
@@ -160,7 +164,7 @@ function ReasonTextarea({ value, onChange, placeholder }: { value: string; onCha
 }
 
 /* ── Main ── */
-export default function EventDataTab({ eventData, onUpdate, onDeleted, adminUsername, canManagePayouts, canModerate }: Props) {
+export default function EventDataTab({ eventData, onUpdate, onDeleted, adminUsername, canManagePayouts, canModerate, canMatchReferrals }: Props) {
   const [event, setEvent] = useState(eventData)
   const [activeImage, setActiveImage] = useState(event.eventImage)
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null)
@@ -174,6 +178,8 @@ export default function EventDataTab({ eventData, onUpdate, onDeleted, adminUser
   const [statusReason, setStatusReason] = useState("")
   const [suspendModal, setSuspendModal] = useState(false)
   const [suspendReason, setSuspendReason] = useState("")
+  const [queueModal, setQueueModal] = useState(false)
+  const [queueReason, setQueueReason] = useState("")
   const [deleteModal, setDeleteModal] = useState(false)
   const [deleteConfirmText, setDeleteConfirmText] = useState("")
   const [deleteReason, setDeleteReason] = useState("")
@@ -234,6 +240,19 @@ export default function EventDataTab({ eventData, onUpdate, onDeleted, adminUser
       setEvent(updated); onUpdate(updated)
       setSuspendModal(false); setSuspendReason("")
       showToast(`Event ${!event.suspended ? "suspended" : "unsuspended"} successfully`, "success")
+    } catch (e) { showToast(e instanceof Error ? e.message : "Failed", "error") }
+    finally { setSaving(null) }
+  }
+
+  const handleToggleQueueConfirm = async () => {
+    if (!queueReason.trim()) return
+    setSaving("queue")
+    try {
+      await patchEvent("toggleQueue", { virtualQueueEnabled: !event.virtualQueueEnabled }, queueReason)
+      const updated = { ...event, virtualQueueEnabled: !event.virtualQueueEnabled }
+      setEvent(updated); onUpdate(updated)
+      setQueueModal(false); setQueueReason("")
+      showToast(`Virtual queue ${!event.virtualQueueEnabled ? "enabled" : "disabled"} for this event`, "success")
     } catch (e) { showToast(e instanceof Error ? e.message : "Failed", "error") }
     finally { setSaving(null) }
   }
@@ -337,7 +356,7 @@ export default function EventDataTab({ eventData, onUpdate, onDeleted, adminUser
 
       {/* Referrals tab */}
       {activeTab === "referrals" && (
-        <ReferralsTab eventId={event.id} />
+        <ReferralsTab eventId={event.id} canMatch={canMatchReferrals} />
       )}
 
       {/* Passes tab */}
@@ -502,6 +521,44 @@ export default function EventDataTab({ eventData, onUpdate, onDeleted, adminUser
         </div>
       </div>
 
+      {/* ── VIRTUAL QUEUE ── */}
+      <div className={`rounded-2xl border overflow-hidden ${event.virtualQueueEnabled ? "border-purple-200 bg-purple-50/30" : "border-slate-200 bg-white"}`}>
+        <div className="px-5 py-4 border-b border-slate-100 flex items-center gap-2.5">
+          <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${event.virtualQueueEnabled ? "bg-purple-100 border border-purple-200" : "bg-slate-100 border border-slate-200"}`}>
+            <Users className={`w-3.5 h-3.5 ${event.virtualQueueEnabled ? "text-[#6b2fa5]" : "text-slate-400"}`} />
+          </div>
+          <div>
+            <h3 className="font-semibold text-sm text-slate-800">Virtual Queue</h3>
+            <p className="text-xs text-slate-500">Waiting-room checkout for high-traffic ticket sales.</p>
+          </div>
+        </div>
+        <div className="p-5">
+          <div className="rounded-xl border border-slate-200 bg-white p-4 flex items-start justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <Ticket className={`w-4 h-4 shrink-0 mt-0.5 ${event.virtualQueueEnabled ? "text-[#6b2fa5]" : "text-slate-400"}`} />
+              <div>
+                <div className="flex items-center gap-2">
+                  <p className="text-sm font-semibold text-slate-800">
+                    {event.virtualQueueEnabled ? "Queue Enabled" : "Queue Disabled"}
+                  </p>
+                  {event.virtualQueueEnabled && <Badge color="blue">Active</Badge>}
+                </div>
+                <p className="text-xs text-slate-500 mt-0.5 leading-relaxed max-w-md">
+                  When enabled, buyers wait in a virtual line and are admitted to checkout in batches of {event.queueBatchSize || 50}, instead of hitting checkout all at once.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => setQueueModal(true)}
+              disabled={saving === "queue"}
+              className={`shrink-0 px-3 py-1.5 text-xs font-semibold rounded-lg border transition-colors disabled:opacity-50 ${event.virtualQueueEnabled ? "border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100" : "border-purple-200 bg-purple-50 text-[#6b2fa5] hover:bg-purple-100"}`}
+            >
+              {event.virtualQueueEnabled ? "Disable" : "Enable"}
+            </button>
+          </div>
+        </div>
+      </div>
+
       {/* ── DANGEROUS ZONE ── */}
       {canModerate && (
       <div className="rounded-2xl border border-red-200 bg-red-50/50 overflow-hidden">
@@ -661,6 +718,22 @@ export default function EventDataTab({ eventData, onUpdate, onDeleted, adminUser
         loading={saving === "suspend"}
       >
         <ReasonTextarea value={suspendReason} onChange={setSuspendReason} />
+      </ActionModal>
+
+      <ActionModal
+        open={queueModal}
+        onClose={() => { setQueueModal(false); setQueueReason("") }}
+        title={event.virtualQueueEnabled ? "Disable the virtual queue?" : "Enable the virtual queue?"}
+        description={event.virtualQueueEnabled
+          ? "Buyers will go straight to checkout again, with no waiting room."
+          : `Buyers will queue and be admitted to checkout in batches of ${event.queueBatchSize || 50}.`}
+        warning={!event.virtualQueueEnabled ? "Turn this on for high-demand events to protect checkout and payment processing from being overwhelmed." : undefined}
+        onConfirm={handleToggleQueueConfirm}
+        confirmLabel={event.virtualQueueEnabled ? "Confirm Disable" : "Confirm Enable"}
+        loading={saving === "queue"}
+        confirmDisabled={!queueReason.trim()}
+      >
+        <ReasonTextarea value={queueReason} onChange={setQueueReason} />
       </ActionModal>
 
       <ActionModal

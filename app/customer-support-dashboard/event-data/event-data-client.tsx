@@ -54,6 +54,8 @@ interface EventData {
   createdAt: string | null
   updatedAt: string | null
   attendeeCount: number
+  virtualQueueEnabled: boolean
+  queueBatchSize: number
 }
 
 type ViewState = "list" | "eventDetails" | "deletedEvents"
@@ -239,6 +241,7 @@ export function EventDataClient() {
           adminUsername={session?.username ?? "Admin"}
           canManagePayouts={session?.role === "admin"}
           canModerate={session?.role === "admin"}
+          canMatchReferrals={session?.role === "admin" || session?.role === "customer-support"}
         />
       </div>
     )

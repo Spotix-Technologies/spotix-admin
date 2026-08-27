@@ -152,6 +152,8 @@ export async function GET(request: NextRequest) {
           affiliateId: d.affiliateId || null,
           affiliateName: d.affiliateName || null,
           allowAgents: d.allowAgents ?? false,
+          virtualQueueEnabled: d.virtualQueueEnabled ?? false,
+          queueBatchSize: d.queueBatchSize ?? 50,
           enabledCollaboration: d.enabledCollaboration ?? false,
           hasStopDate: d.hasStopDate ?? false,
           stopDate: d.stopDate || null,
@@ -180,21 +182,28 @@ export async function GET(request: NextRequest) {
 export async function PATCH(request: NextRequest) {
   try {
     // flag/setStatus/suspend all modify the event's account-facing stats —
-    // restricted to full admins only. customer-support and exec-assistant
-    // keep read access via GET above.
-    const adminResult = await verifyAdminAccess(request, ["admin"])
+    // restricted to full admins only (enforced per-action below).
+    // toggleQueue is an operational traffic-management toggle, not a
+    // punitive moderation action, so customer-support can reach it too —
+    // gate widened here, then narrowed back down per-action.
+    const adminResult = await verifyAdminAccess(request, ["admin", "customer-support"])
     if ("error" in adminResult) {
       const response = adminResult.error as NextResponse
       const json = await response.json() as any
       return NextResponse.json({ error: json.error || "Forbidden: admin access required", developer: DEV_TAG }, { status: response.status })
     }
     const admin = adminResult
+    const isFullAdmin = admin.role === "admin" || admin.secondaryRoles.includes("admin")
 
     const body = await request.json()
     const { eventId, action, reason } = body
 
     if (!eventId || !action) {
       return NextResponse.json({ error: "eventId and action are required", developer: DEV_TAG }, { status: 400 })
+    }
+
+    if (["flag", "setStatus", "suspend"].includes(action) && !isFullAdmin) {
+      return NextResponse.json({ error: "Forbidden: admin access required", developer: DEV_TAG }, { status: 403 })
     }
     if (!reason?.trim()) {
       return NextResponse.json({ error: "A reason is required for all admin actions", developer: DEV_TAG }, { status: 400 })
@@ -238,6 +247,19 @@ export async function PATCH(request: NextRequest) {
       }
       await eventRef.update({ suspended, updatedAt: new Date(), suspendAudit: FieldValue.arrayUnion({ ...auditEntry, suspended }) })
       return NextResponse.json({ success: true, message: `Event ${suspended ? "suspended" : "unsuspended"}`, developer: DEV_TAG }, { status: 200 })
+    }
+
+    if (action === "toggleQueue") {
+      const { virtualQueueEnabled } = body
+      if (typeof virtualQueueEnabled !== "boolean") {
+        return NextResponse.json({ error: "virtualQueueEnabled (boolean) required", developer: DEV_TAG }, { status: 400 })
+      }
+      await eventRef.update({
+        virtualQueueEnabled,
+        updatedAt: new Date(),
+        queueAudit: FieldValue.arrayUnion({ ...auditEntry, virtualQueueEnabled }),
+      })
+      return NextResponse.json({ success: true, message: `Virtual queue ${virtualQueueEnabled ? "enabled" : "disabled"}`, developer: DEV_TAG }, { status: 200 })
     }
 
     return NextResponse.json({ error: "Unknown action", developer: DEV_TAG }, { status: 400 })
