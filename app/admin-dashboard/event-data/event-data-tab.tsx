@@ -5,12 +5,14 @@ import {
   MapPin, Calendar, Clock, Ticket, Users, TrendingUp, Heart,
   Flag, EyeOff, Eye, ShieldBan, Trash2, AlertTriangle,
   X, CheckCircle, DollarSign, Link2, Tag, Info, Wallet,
-  Loader2, AlertCircle,
+  Loader2, AlertCircle, Percent, Settings2,
 } from "lucide-react"
 import AdminAttendeesTab from "./admin-attendees-tab"
 import PassesTab from "./passes-tab"
 import ReferralsTab from "./referrals-tab"
 import AdminEventPayoutsPanel from "@/components/payout/admin-event-payouts-panel"
+import AdminEditPanel from "./admin-edit-panel"
+
 
 interface TicketTier {
   policy: string
@@ -50,12 +52,31 @@ interface EventData {
   allowAgents: boolean
   virtualQueueEnabled: boolean
   queueBatchSize: number
+  queueSessionTTL: number
   enabledCollaboration: boolean
   hasStopDate: boolean
   stopDate: string | null
+  /** null = not overridden for this event — checkout falls back to the
+   *  system default (5%). See priceUtility.ts (spotix-user). */
+  platformPercentageFee: number | null
+  /** null = not overridden — checkout falls back to ₦0, NOT the ₦100
+   *  system default (an unset flat fee means one was deliberately not added). */
+  platformFlatFee: number | null
   createdAt: string | null
   updatedAt: string | null
   attendeeCount: number
+  discounts?: Array<{
+    id: string
+    code: string
+    type: "percentage" | "flat"
+    value: number
+    maxUses: number
+    usedCount: number
+    active: boolean
+    expiryDate?: string | null
+    applicableTickets?: string[] | null
+  }>
+  editHistory?: unknown[]
 }
 
 interface Props {
@@ -169,7 +190,7 @@ export default function EventDataTab({ eventData, onUpdate, onDeleted, adminUser
   const [activeImage, setActiveImage] = useState(event.eventImage)
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null)
   const [saving, setSaving] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<"overview" | "attendees" | "payouts" | "passes" | "referrals">("overview")
+  const [activeTab, setActiveTab] = useState<"overview" | "attendees" | "payouts" | "passes" | "referrals" | "edit">("overview")
 
   const [flagModal, setFlagModal] = useState(false)
   const [flagReason, setFlagReason] = useState("")
@@ -180,6 +201,14 @@ export default function EventDataTab({ eventData, onUpdate, onDeleted, adminUser
   const [suspendReason, setSuspendReason] = useState("")
   const [queueModal, setQueueModal] = useState(false)
   const [queueReason, setQueueReason] = useState("")
+  const [queueSettingsModal, setQueueSettingsModal] = useState(false)
+  const [batchSizeInput, setBatchSizeInput] = useState("50")
+  const [waitMinutesInput, setWaitMinutesInput] = useState("8")
+  const [queueSettingsReason, setQueueSettingsReason] = useState("")
+  const [pricingModal, setPricingModal] = useState(false)
+  const [pctFeeInput, setPctFeeInput] = useState("5")
+  const [flatFeeInput, setFlatFeeInput] = useState("0")
+  const [pricingReason, setPricingReason] = useState("")
   const [deleteModal, setDeleteModal] = useState(false)
   const [deleteConfirmText, setDeleteConfirmText] = useState("")
   const [deleteReason, setDeleteReason] = useState("")
@@ -257,6 +286,49 @@ export default function EventDataTab({ eventData, onUpdate, onDeleted, adminUser
     finally { setSaving(null) }
   }
 
+  const handleUpdateQueueSettingsConfirm = async () => {
+    const batchSize = parseInt(batchSizeInput, 10)
+    const waitMinutes = parseInt(waitMinutesInput, 10)
+    if (!queueSettingsReason.trim() || !Number.isInteger(batchSize) || batchSize < 1 || !Number.isInteger(waitMinutes) || waitMinutes < 1) return
+    setSaving("queueSettings")
+    try {
+      await patchEvent("updateQueueConfig", { queueBatchSize: batchSize, queueWaitMinutes: waitMinutes }, queueSettingsReason)
+      const updated = { ...event, queueBatchSize: batchSize, queueSessionTTL: waitMinutes * 60 }
+      setEvent(updated); onUpdate(updated)
+      setQueueSettingsModal(false); setQueueSettingsReason("")
+      showToast(`Queue settings updated — ${batchSize} admitted at a time, ${waitMinutes} min to check out`, "success")
+    } catch (e) { showToast(e instanceof Error ? e.message : "Failed", "error") }
+    finally { setSaving(null) }
+  }
+
+  const handleUpdatePricingConfirm = async () => {
+    const pct = Number(pctFeeInput)
+    const flat = Number(flatFeeInput)
+    if (!pricingReason.trim() || !Number.isFinite(pct) || pct < 0 || pct > 100 || !Number.isFinite(flat) || flat < 0) return
+    setSaving("pricing")
+    try {
+      await patchEvent("updatePricing", { platformPercentageFee: pct, platformFlatFee: flat }, pricingReason)
+      const updated = { ...event, platformPercentageFee: pct, platformFlatFee: flat }
+      setEvent(updated); onUpdate(updated)
+      setPricingModal(false); setPricingReason("")
+      showToast(`Platform fee updated — ${pct}% + ${money(flat)} per ticket`, "success")
+    } catch (e) { showToast(e instanceof Error ? e.message : "Failed", "error") }
+    finally { setSaving(null) }
+  }
+
+  const handleResetPricingConfirm = async () => {
+    if (!pricingReason.trim()) return
+    setSaving("pricing")
+    try {
+      await patchEvent("updatePricing", { platformPercentageFee: null, platformFlatFee: null }, pricingReason)
+      const updated = { ...event, platformPercentageFee: null, platformFlatFee: null }
+      setEvent(updated); onUpdate(updated)
+      setPricingModal(false); setPricingReason("")
+      showToast("Platform fee reset to system default (5% + ₦0)", "success")
+    } catch (e) { showToast(e instanceof Error ? e.message : "Failed", "error") }
+    finally { setSaving(null) }
+  }
+
   const handleDeleteConfirm = async () => {
     if (deleteConfirmText !== event.eventName || !deleteReason.trim()) return
     setSaving("delete")
@@ -279,8 +351,15 @@ export default function EventDataTab({ eventData, onUpdate, onDeleted, adminUser
     try { return new Date(d).toLocaleDateString("en-NG", { weekday: "short", year: "numeric", month: "short", day: "numeric" }) }
     catch { return d }
   }
-  const money = (n: number) => `₦${(n || 0).toLocaleString()}`
+  const money = (n: number) => `��${(n || 0).toLocaleString()}`
   const tierRevenue = event.ticketPrices.reduce((s, t) => s + (parseInt(t.price) || 0) * (t.ticketsSold || 0), 0)
+
+  // ── Platform fee — mirrors resolvePlatformFeeRates() in spotix-user's
+  // priceUtility.ts: unset percentage falls back to 5%, unset flat fee
+  // falls back to ₦0 (not the ₦100 system default — see that file).
+  const isPricingCustomised = event.platformPercentageFee !== null || event.platformFlatFee !== null
+  const effectivePctFee = event.platformPercentageFee ?? 5
+  const effectiveFlatFee = event.platformFlatFee ?? 0
 
   return (
     <div className="space-y-5">
@@ -305,6 +384,7 @@ export default function EventDataTab({ eventData, onUpdate, onDeleted, adminUser
         >
           Overview
         </button>
+        <button onClick={() => setActiveTab("edit")} className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all ${activeTab === "edit" ? "bg-white text-[#6b2fa5] shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>Edit event</button>
         <button
           onClick={() => setActiveTab("attendees")}
           className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all flex items-center gap-1.5 ${
@@ -353,6 +433,34 @@ export default function EventDataTab({ eventData, onUpdate, onDeleted, adminUser
           Referrals
         </button>
       </div>
+
+      {activeTab === "edit" && (
+        <AdminEditPanel
+          event={event}
+          discounts={event.discounts}
+          onUpdate={(updated, discounts) => {
+            // AdminEditPanel's ticket-tier shape is intentionally looser
+            // (price/availableTickets as string | number) since it's driven
+            // by raw <input> values — normalize back to this file's stricter
+            // TicketTier (price/description/ticketsSold/availableTickets all
+            // required, price as string) before merging into EventData.
+            const next: EventData = {
+              ...event,
+              ...updated,
+              ticketPrices: updated.ticketPrices.map((t) => ({
+                policy: t.policy,
+                price: String(t.price ?? ""),
+                description: t.description ?? "",
+                ticketsSold: t.ticketsSold ?? 0,
+                availableTickets: Number(t.availableTickets ?? t.availability ?? 0) || 0,
+              })),
+              ...(discounts ? { discounts } : {}),
+            }
+            setEvent(next)
+            onUpdate(next)
+          }}
+        />
+      )}
 
       {/* Referrals tab */}
       {activeTab === "referrals" && (
@@ -532,7 +640,7 @@ export default function EventDataTab({ eventData, onUpdate, onDeleted, adminUser
             <p className="text-xs text-slate-500">Waiting-room checkout for high-traffic ticket sales.</p>
           </div>
         </div>
-        <div className="p-5">
+        <div className="p-5 space-y-3">
           <div className="rounded-xl border border-slate-200 bg-white p-4 flex items-start justify-between gap-4">
             <div className="flex items-start gap-3">
               <Ticket className={`w-4 h-4 shrink-0 mt-0.5 ${event.virtualQueueEnabled ? "text-[#6b2fa5]" : "text-slate-400"}`} />
@@ -556,8 +664,84 @@ export default function EventDataTab({ eventData, onUpdate, onDeleted, adminUser
               {event.virtualQueueEnabled ? "Disable" : "Enable"}
             </button>
           </div>
+
+          <div className="rounded-xl border border-slate-200 bg-white p-4 flex items-center justify-between gap-4">
+            <div className="flex items-center gap-5 flex-wrap">
+              <div>
+                <p className="text-[11px] uppercase tracking-wide text-slate-400 font-semibold">Admitted at once</p>
+                <p className="text-sm font-bold text-slate-800">{event.queueBatchSize || 50} people</p>
+              </div>
+              <div>
+                <p className="text-[11px] uppercase tracking-wide text-slate-400 font-semibold">Time to check out</p>
+                <p className="text-sm font-bold text-slate-800">{Math.round((event.queueSessionTTL || 480) / 60)} min</p>
+              </div>
+            </div>
+            <button
+              onClick={() => {
+                setBatchSizeInput(String(event.queueBatchSize || 50))
+                setWaitMinutesInput(String(Math.round((event.queueSessionTTL || 480) / 60)))
+                setQueueSettingsReason("")
+                setQueueSettingsModal(true)
+              }}
+              disabled={saving === "queueSettings"}
+              className="shrink-0 px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100 transition-colors disabled:opacity-50"
+            >
+              Edit Settings
+            </button>
+          </div>
         </div>
       </div>
+
+      {/* ── PLATFORM FEES ── */}
+      {canModerate && (
+      <div className={`rounded-2xl border overflow-hidden ${isPricingCustomised ? "border-purple-200 bg-purple-50/30" : "border-slate-200 bg-white"}`}>
+        <div className="px-5 py-4 border-b border-slate-100 flex items-center gap-2.5">
+          <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${isPricingCustomised ? "bg-purple-100 border border-purple-200" : "bg-slate-100 border border-slate-200"}`}>
+            <Percent className={`w-3.5 h-3.5 ${isPricingCustomised ? "text-[#6b2fa5]" : "text-slate-400"}`} />
+          </div>
+          <div>
+            <h3 className="font-semibold text-sm text-slate-800">Platform Fees</h3>
+            <p className="text-xs text-slate-500">The buyer-facing fee added on top of each ticket price at checkout.</p>
+          </div>
+        </div>
+        <div className="p-5 space-y-3">
+          <div className="rounded-xl border border-slate-200 bg-white p-4 flex items-start justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <Settings2 className={`w-4 h-4 shrink-0 mt-0.5 ${isPricingCustomised ? "text-[#6b2fa5]" : "text-slate-400"}`} />
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <p className="text-sm font-semibold text-slate-800">
+                    Currently charging {effectivePctFee}% + {money(effectiveFlatFee)} per ticket
+                  </p>
+                  {isPricingCustomised ? <Badge color="blue">Customised</Badge> : <Badge color="slate">Platform Default</Badge>}
+                </div>
+                <p className="text-xs text-slate-500 mt-0.5 leading-relaxed max-w-md">
+                  {event.platformPercentageFee === null && event.platformFlatFee === null
+                    ? "This event has never been customised — it uses the platform default (5% + ₦0 flat)."
+                    : <>
+                        {event.platformPercentageFee === null && "Percentage uses the platform default (5%). "}
+                        {event.platformFlatFee === null && "Flat fee uses the platform default (₦0 — not ₦100; a flat fee only applies once explicitly set)."}
+                      </>}
+                  {" "}Applies to every ticket purchased on this event going forward; past purchases already charged keep their original amount.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => {
+                setPctFeeInput(String(effectivePctFee))
+                setFlatFeeInput(String(effectiveFlatFee))
+                setPricingReason("")
+                setPricingModal(true)
+              }}
+              disabled={saving === "pricing"}
+              className="shrink-0 px-3 py-1.5 text-xs font-semibold rounded-lg border border-purple-200 bg-purple-50 text-[#6b2fa5] hover:bg-purple-100 transition-colors disabled:opacity-50"
+            >
+              Edit Fees
+            </button>
+          </div>
+        </div>
+      </div>
+      )}
 
       {/* ── DANGEROUS ZONE ── */}
       {canModerate && (
@@ -734,6 +918,94 @@ export default function EventDataTab({ eventData, onUpdate, onDeleted, adminUser
         confirmDisabled={!queueReason.trim()}
       >
         <ReasonTextarea value={queueReason} onChange={setQueueReason} />
+      </ActionModal>
+
+      <ActionModal
+        open={queueSettingsModal}
+        onClose={() => { setQueueSettingsModal(false); setQueueSettingsReason("") }}
+        title="Edit queue settings"
+        description="Controls how many buyers are admitted to checkout at once, and how long each one has before their slot is passed to the next person in line."
+        onConfirm={handleUpdateQueueSettingsConfirm}
+        confirmLabel="Save Settings"
+        loading={saving === "queueSettings"}
+        confirmDisabled={!queueSettingsReason.trim() || !batchSizeInput.trim() || !waitMinutesInput.trim()}
+      >
+        <div className="grid grid-cols-2 gap-3 mb-3">
+          <div>
+            <label className="text-xs font-medium text-slate-500 mb-1.5 block">Admitted at once</label>
+            <input
+              type="number"
+              min={1}
+              max={5000}
+              value={batchSizeInput}
+              onChange={(e) => setBatchSizeInput(e.target.value)}
+              className="w-full text-sm bg-white border border-slate-200 rounded-lg px-3 py-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#6b2fa5/30] focus:border-[#6b2fa5]"
+            />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-slate-500 mb-1.5 block">Wait time (minutes)</label>
+            <input
+              type="number"
+              min={1}
+              max={60}
+              value={waitMinutesInput}
+              onChange={(e) => setWaitMinutesInput(e.target.value)}
+              className="w-full text-sm bg-white border border-slate-200 rounded-lg px-3 py-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#6b2fa5/30] focus:border-[#6b2fa5]"
+            />
+          </div>
+        </div>
+        <ReasonTextarea value={queueSettingsReason} onChange={setQueueSettingsReason} />
+      </ActionModal>
+
+      <ActionModal
+        open={pricingModal}
+        onClose={() => { setPricingModal(false); setPricingReason("") }}
+        title="Edit platform fees"
+        description="Sets the fee added on top of every ticket price for this event, going forward. Past purchases are unaffected."
+        onConfirm={handleUpdatePricingConfirm}
+        confirmLabel="Save Fees"
+        loading={saving === "pricing"}
+        confirmDisabled={!pricingReason.trim() || pctFeeInput.trim() === "" || flatFeeInput.trim() === ""}
+      >
+        <div className="grid grid-cols-2 gap-3 mb-3">
+          <div>
+            <label className="text-xs font-medium text-slate-500 mb-1.5 block">Percentage fee (%)</label>
+            <input
+              type="number"
+              min={0}
+              max={100}
+              step="0.1"
+              value={pctFeeInput}
+              onChange={(e) => setPctFeeInput(e.target.value)}
+              className="w-full text-sm bg-white border border-slate-200 rounded-lg px-3 py-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#6b2fa5/30] focus:border-[#6b2fa5]"
+            />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-slate-500 mb-1.5 block">Flat fee (₦)</label>
+            <input
+              type="number"
+              min={0}
+              step="1"
+              value={flatFeeInput}
+              onChange={(e) => setFlatFeeInput(e.target.value)}
+              className="w-full text-sm bg-white border border-slate-200 rounded-lg px-3 py-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#6b2fa5/30] focus:border-[#6b2fa5]"
+            />
+          </div>
+        </div>
+        <p className="text-xs text-slate-400 -mt-1">
+          Platform default is 5% with no flat fee. Set flat fee to 0 to charge percentage only.
+        </p>
+        {isPricingCustomised && (
+          <button
+            type="button"
+            onClick={handleResetPricingConfirm}
+            disabled={saving === "pricing" || !pricingReason.trim()}
+            className="text-xs font-semibold text-[#6b2fa5] hover:underline disabled:opacity-40 disabled:cursor-not-allowed disabled:no-underline"
+          >
+            Reset to platform default instead
+          </button>
+        )}
+        <ReasonTextarea value={pricingReason} onChange={setPricingReason} placeholder="Reason for this fee change (required)…" />
       </ActionModal>
 
       <ActionModal

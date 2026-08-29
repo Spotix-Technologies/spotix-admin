@@ -50,6 +50,7 @@ interface EventData {
   allowAgents: boolean
   virtualQueueEnabled: boolean
   queueBatchSize: number
+  queueSessionTTL: number
   enabledCollaboration: boolean
   hasStopDate: boolean
   stopDate: string | null
@@ -180,6 +181,10 @@ export default function EventDataTab({ eventData, onUpdate, onDeleted, adminUser
   const [suspendReason, setSuspendReason] = useState("")
   const [queueModal, setQueueModal] = useState(false)
   const [queueReason, setQueueReason] = useState("")
+  const [queueSettingsModal, setQueueSettingsModal] = useState(false)
+  const [batchSizeInput, setBatchSizeInput] = useState("50")
+  const [waitMinutesInput, setWaitMinutesInput] = useState("8")
+  const [queueSettingsReason, setQueueSettingsReason] = useState("")
   const [deleteModal, setDeleteModal] = useState(false)
   const [deleteConfirmText, setDeleteConfirmText] = useState("")
   const [deleteReason, setDeleteReason] = useState("")
@@ -253,6 +258,21 @@ export default function EventDataTab({ eventData, onUpdate, onDeleted, adminUser
       setEvent(updated); onUpdate(updated)
       setQueueModal(false); setQueueReason("")
       showToast(`Virtual queue ${!event.virtualQueueEnabled ? "enabled" : "disabled"} for this event`, "success")
+    } catch (e) { showToast(e instanceof Error ? e.message : "Failed", "error") }
+    finally { setSaving(null) }
+  }
+
+  const handleUpdateQueueSettingsConfirm = async () => {
+    const batchSize = parseInt(batchSizeInput, 10)
+    const waitMinutes = parseInt(waitMinutesInput, 10)
+    if (!queueSettingsReason.trim() || !Number.isInteger(batchSize) || batchSize < 1 || !Number.isInteger(waitMinutes) || waitMinutes < 1) return
+    setSaving("queueSettings")
+    try {
+      await patchEvent("updateQueueConfig", { queueBatchSize: batchSize, queueWaitMinutes: waitMinutes }, queueSettingsReason)
+      const updated = { ...event, queueBatchSize: batchSize, queueSessionTTL: waitMinutes * 60 }
+      setEvent(updated); onUpdate(updated)
+      setQueueSettingsModal(false); setQueueSettingsReason("")
+      showToast(`Queue settings updated — ${batchSize} admitted at a time, ${waitMinutes} min to check out`, "success")
     } catch (e) { showToast(e instanceof Error ? e.message : "Failed", "error") }
     finally { setSaving(null) }
   }
@@ -532,7 +552,7 @@ export default function EventDataTab({ eventData, onUpdate, onDeleted, adminUser
             <p className="text-xs text-slate-500">Waiting-room checkout for high-traffic ticket sales.</p>
           </div>
         </div>
-        <div className="p-5">
+        <div className="p-5 space-y-3">
           <div className="rounded-xl border border-slate-200 bg-white p-4 flex items-start justify-between gap-4">
             <div className="flex items-start gap-3">
               <Ticket className={`w-4 h-4 shrink-0 mt-0.5 ${event.virtualQueueEnabled ? "text-[#6b2fa5]" : "text-slate-400"}`} />
@@ -554,6 +574,31 @@ export default function EventDataTab({ eventData, onUpdate, onDeleted, adminUser
               className={`shrink-0 px-3 py-1.5 text-xs font-semibold rounded-lg border transition-colors disabled:opacity-50 ${event.virtualQueueEnabled ? "border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100" : "border-purple-200 bg-purple-50 text-[#6b2fa5] hover:bg-purple-100"}`}
             >
               {event.virtualQueueEnabled ? "Disable" : "Enable"}
+            </button>
+          </div>
+
+          <div className="rounded-xl border border-slate-200 bg-white p-4 flex items-center justify-between gap-4">
+            <div className="flex items-center gap-5 flex-wrap">
+              <div>
+                <p className="text-[11px] uppercase tracking-wide text-slate-400 font-semibold">Admitted at once</p>
+                <p className="text-sm font-bold text-slate-800">{event.queueBatchSize || 50} people</p>
+              </div>
+              <div>
+                <p className="text-[11px] uppercase tracking-wide text-slate-400 font-semibold">Time to check out</p>
+                <p className="text-sm font-bold text-slate-800">{Math.round((event.queueSessionTTL || 480) / 60)} min</p>
+              </div>
+            </div>
+            <button
+              onClick={() => {
+                setBatchSizeInput(String(event.queueBatchSize || 50))
+                setWaitMinutesInput(String(Math.round((event.queueSessionTTL || 480) / 60)))
+                setQueueSettingsReason("")
+                setQueueSettingsModal(true)
+              }}
+              disabled={saving === "queueSettings"}
+              className="shrink-0 px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100 transition-colors disabled:opacity-50"
+            >
+              Edit Settings
             </button>
           </div>
         </div>
@@ -734,6 +779,43 @@ export default function EventDataTab({ eventData, onUpdate, onDeleted, adminUser
         confirmDisabled={!queueReason.trim()}
       >
         <ReasonTextarea value={queueReason} onChange={setQueueReason} />
+      </ActionModal>
+
+      <ActionModal
+        open={queueSettingsModal}
+        onClose={() => { setQueueSettingsModal(false); setQueueSettingsReason("") }}
+        title="Edit queue settings"
+        description="Controls how many buyers are admitted to checkout at once, and how long each one has before their slot is passed to the next person in line."
+        onConfirm={handleUpdateQueueSettingsConfirm}
+        confirmLabel="Save Settings"
+        loading={saving === "queueSettings"}
+        confirmDisabled={!queueSettingsReason.trim() || !batchSizeInput.trim() || !waitMinutesInput.trim()}
+      >
+        <div className="grid grid-cols-2 gap-3 mb-3">
+          <div>
+            <label className="text-xs font-medium text-slate-500 mb-1.5 block">Admitted at once</label>
+            <input
+              type="number"
+              min={1}
+              max={5000}
+              value={batchSizeInput}
+              onChange={(e) => setBatchSizeInput(e.target.value)}
+              className="w-full text-sm bg-white border border-slate-200 rounded-lg px-3 py-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#6b2fa5/30] focus:border-[#6b2fa5]"
+            />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-slate-500 mb-1.5 block">Wait time (minutes)</label>
+            <input
+              type="number"
+              min={1}
+              max={60}
+              value={waitMinutesInput}
+              onChange={(e) => setWaitMinutesInput(e.target.value)}
+              className="w-full text-sm bg-white border border-slate-200 rounded-lg px-3 py-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#6b2fa5/30] focus:border-[#6b2fa5]"
+            />
+          </div>
+        </div>
+        <ReasonTextarea value={queueSettingsReason} onChange={setQueueSettingsReason} />
       </ActionModal>
 
       <ActionModal

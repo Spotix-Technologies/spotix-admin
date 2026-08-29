@@ -56,6 +56,7 @@ interface EventData {
   attendeeCount: number
   virtualQueueEnabled: boolean
   queueBatchSize: number
+  queueSessionTTL: number
 }
 
 type ViewState = "list" | "eventDetails" | "deletedEvents"

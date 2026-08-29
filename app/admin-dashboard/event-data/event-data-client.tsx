@@ -51,8 +51,11 @@ interface EventData {
   enabledCollaboration: boolean
   virtualQueueEnabled: boolean
   queueBatchSize: number
+  queueSessionTTL: number
   hasStopDate: boolean
   stopDate: string | null
+  platformPercentageFee: number | null
+  platformFlatFee: number | null
   createdAt: string | null
   updatedAt: string | null
   attendeeCount: number

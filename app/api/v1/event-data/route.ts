@@ -8,6 +8,31 @@ export const dynamic = "force-dynamic"
 
 const DEV_TAG = "API developed and maintained by Spotix Technologies"
 
+function jsonSafe(value: unknown): unknown {
+  if (value === undefined) return null
+  if (value && typeof value === "object" && "toDate" in value && typeof (value as any).toDate === "function") return (value as any).toDate().toISOString()
+  try { return JSON.parse(JSON.stringify(value)) } catch { return String(value) }
+}
+function diffEventFields(before: Record<string, unknown>, after: Record<string, unknown>) {
+  const fields = new Set([...Object.keys(before), ...Object.keys(after)])
+  return [...fields].reduce<Record<string, { before: unknown; after: unknown }>>((out, field) => {
+    if (field === "updatedAt") return out
+    const oldValue = jsonSafe(before[field]); const newValue = jsonSafe(after[field])
+    if (JSON.stringify(oldValue) !== JSON.stringify(newValue)) out[field] = { before: oldValue, after: newValue }
+    return out
+  }, {})
+}
+async function eventDocData(eventRef: FirebaseFirestore.DocumentReference) {
+  return (await eventRef.get()).data() || {}
+}
+// Discount actions (addDiscount/editDiscount/toggleDiscount/deleteDiscount) don't
+// require a `reason`, so it can arrive as `undefined` — Firestore rejects
+// `undefined` values outright, so normalize it to `null` before any write.
+function safeReason(reason: unknown): string | null {
+  return typeof reason === "string" && reason.trim() ? reason : null
+}
+
+
 
 
 /* ─────────────────────────────────────────────
@@ -116,11 +141,10 @@ export async function GET(request: NextRequest) {
       }
 
       const d = eventDoc.data()!
-      const attendeesSnap = await adminDb
-        .collection("events")
-        .doc(eventId)
-        .collection("attendees")
-        .get()
+      const eventRef = adminDb.collection("events").doc(eventId)
+      const attendeesSnap = await eventRef.collection("attendees").get()
+      const discountsSnap = await eventRef.collection("discounts").get()
+      const historySnap = await eventRef.collection("editHistory").orderBy("createdAt", "desc").limit(50).get()
 
       return NextResponse.json({
         success: true,
@@ -154,12 +178,22 @@ export async function GET(request: NextRequest) {
           allowAgents: d.allowAgents ?? false,
           virtualQueueEnabled: d.virtualQueueEnabled ?? false,
           queueBatchSize: d.queueBatchSize ?? 50,
+          queueSessionTTL: d.queueSessionTTL ?? 480,
           enabledCollaboration: d.enabledCollaboration ?? false,
           hasStopDate: d.hasStopDate ?? false,
           stopDate: d.stopDate || null,
+          // Admin-editable platform fee overrides for this event. Raw values
+          // as stored — null means "not set", which the checkout resolves as:
+          // percentage → system default (5%), flat fee → ₦0 (NOT the ₦100
+          // default; an unset flat fee means one was deliberately not added).
+          platformPercentageFee:
+            typeof d.platformPercentageFee === "number" ? d.platformPercentageFee : null,
+          platformFlatFee: typeof d.platformFlatFee === "number" ? d.platformFlatFee : null,
           createdAt: d.createdAt?.toDate?.()?.toISOString() || null,
           updatedAt: d.updatedAt?.toDate?.()?.toISOString() || null,
           attendeeCount: attendeesSnap.size,
+          discounts: discountsSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() })),
+          editHistory: historySnap.docs.map((doc) => ({ id: doc.id, ...doc.data(), createdAt: doc.data().createdAt?.toDate?.()?.toISOString() || null })),
         },
         developer: DEV_TAG,
       }, { status: 200 })
@@ -202,11 +236,12 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: "eventId and action are required", developer: DEV_TAG }, { status: 400 })
     }
 
-    if (["flag", "setStatus", "suspend"].includes(action) && !isFullAdmin) {
+    if (["flag", "setStatus", "suspend", "updatePricing"].includes(action) && !isFullAdmin) {
       return NextResponse.json({ error: "Forbidden: admin access required", developer: DEV_TAG }, { status: 403 })
     }
-    if (!reason?.trim()) {
-      return NextResponse.json({ error: "A reason is required for all admin actions", developer: DEV_TAG }, { status: 400 })
+    const requiresReason = action !== "addDiscount" && action !== "editDiscount" && action !== "toggleDiscount" && action !== "deleteDiscount"
+    if (requiresReason && !reason?.trim()) {
+      return NextResponse.json({ error: "A reason is required for event changes", developer: DEV_TAG }, { status: 400 })
     }
 
     const eventRef = adminDb.collection("events").doc(eventId)
@@ -220,6 +255,50 @@ export async function PATCH(request: NextRequest) {
       reason,
       timestamp: new Date().toISOString(),
       action,
+    }
+
+    if (action === "editEvent") {
+      const editableFields = ["eventName", "eventDescription", "eventDate", "eventEndDate", "eventStart", "eventEnd", "eventVenue", "eventType", "isFree", "ticketPrices", "hasStopDate", "stopDate"]
+      const before = await eventDocData(eventRef)
+      const updates: Record<string, unknown> = {}
+      for (const field of editableFields) if (Object.prototype.hasOwnProperty.call(body, field)) updates[field] = body[field]
+      if (typeof updates.eventName !== "undefined" && !(updates.eventName as string)?.trim()) return NextResponse.json({ error: "eventName is required", developer: DEV_TAG }, { status: 400 })
+      if (updates.ticketPrices !== undefined && !Array.isArray(updates.ticketPrices)) return NextResponse.json({ error: "ticketPrices must be an array", developer: DEV_TAG }, { status: 400 })
+      updates.updatedAt = new Date()
+      const after = { ...before, ...updates }
+      const changes = diffEventFields(before, after)
+      await eventRef.firestore.runTransaction(async (transaction) => {
+        transaction.update(eventRef, updates)
+        if (Object.keys(changes).length) transaction.create(eventRef.collection("editHistory").doc(), { action: "event_updated", actor: { uid: admin.uid, type: "Spotix", role: admin.role, username: admin.username }, reason, changes, createdAt: FieldValue.serverTimestamp() })
+      })
+      return NextResponse.json({ success: true, message: "Event updated", data: updates, developer: DEV_TAG }, { status: 200 })
+    }
+
+    if (action === "addDiscount" || action === "editDiscount" || action === "toggleDiscount" || action === "deleteDiscount") {
+      const discountRef = body.discountId ? eventRef.collection("discounts").doc(body.discountId) : null
+      if (action === "addDiscount") {
+        if (!body.code?.trim() || !["percentage", "flat"].includes(body.type) || !Number.isFinite(Number(body.value))) return NextResponse.json({ error: "Valid code, type, and value are required", developer: DEV_TAG }, { status: 400 })
+        const ref = eventRef.collection("discounts").doc()
+        const discount = { code: body.code.trim().toUpperCase(), type: body.type, value: Number(body.value), maxUses: Number(body.maxUses) || 1, usedCount: 0, active: body.active !== false, expiryDate: body.expiryDate || null, applicableTickets: body.applicableTickets || null, createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() }
+        await ref.set(discount)
+        await eventRef.collection("editHistory").add({ action: "discount_created", actor: { uid: admin.uid, type: "Spotix", role: admin.role, username: admin.username }, reason: safeReason(reason), changes: { [ref.id]: { before: null, after: { code: discount.code, type: discount.type, value: discount.value, maxUses: discount.maxUses, active: discount.active, expiryDate: discount.expiryDate, applicableTickets: discount.applicableTickets } } }, createdAt: FieldValue.serverTimestamp() })
+        return NextResponse.json({ success: true, discount: { id: ref.id, ...discount }, developer: DEV_TAG }, { status: 201 })
+      }
+      if (!body.discountId) return NextResponse.json({ error: "discountId required", developer: DEV_TAG }, { status: 400 })
+      if (!discountRef) return NextResponse.json({ error: "discountId required", developer: DEV_TAG }, { status: 400 })
+      const snap = await discountRef.get()
+      if (!snap.exists) return NextResponse.json({ error: "Discount not found", developer: DEV_TAG }, { status: 404 })
+      const before = snap.data() || {}
+      if (action === "deleteDiscount") {
+        await discountRef.delete()
+        await eventRef.collection("editHistory").add({ action: "discount_deleted", actor: { uid: admin.uid, type: "Spotix", role: admin.role, username: admin.username }, reason: safeReason(reason), changes: { [body.discountId]: { before, after: null } }, createdAt: FieldValue.serverTimestamp() })
+        return NextResponse.json({ success: true, deleted: body.discountId, developer: DEV_TAG }, { status: 200 })
+      }
+      const updates = action === "toggleDiscount" ? { active: before.active === false, updatedAt: new Date() } : { ...(body.code !== undefined ? { code: String(body.code).trim().toUpperCase() } : {}), ...(body.type !== undefined ? { type: body.type } : {}), ...(body.value !== undefined ? { value: Number(body.value) } : {}), ...(body.maxUses !== undefined ? { maxUses: Number(body.maxUses) } : {}), ...(body.expiryDate !== undefined ? { expiryDate: body.expiryDate || null } : {}), ...(body.applicableTickets !== undefined ? { applicableTickets: body.applicableTickets || null } : {}), updatedAt: new Date() }
+      const changes = diffEventFields(before, { ...before, ...updates })
+      await discountRef.update(updates)
+      await eventRef.collection("editHistory").add({ action: action === "toggleDiscount" ? "discount_toggled" : "discount_updated", actor: { uid: admin.uid, type: "Spotix", role: admin.role, username: admin.username }, reason: safeReason(reason), changes, createdAt: FieldValue.serverTimestamp() })
+      return NextResponse.json({ success: true, discount: { id: snap.id, ...before, ...updates }, developer: DEV_TAG }, { status: 200 })
     }
 
     if (action === "flag") {
@@ -260,6 +339,72 @@ export async function PATCH(request: NextRequest) {
         queueAudit: FieldValue.arrayUnion({ ...auditEntry, virtualQueueEnabled }),
       })
       return NextResponse.json({ success: true, message: `Virtual queue ${virtualQueueEnabled ? "enabled" : "disabled"}`, developer: DEV_TAG }, { status: 200 })
+    }
+
+    if (action === "updateQueueConfig") {
+      const { queueBatchSize, queueWaitMinutes } = body
+      const batchSize = Number(queueBatchSize)
+      const waitMinutes = Number(queueWaitMinutes)
+
+      if (!Number.isInteger(batchSize) || batchSize < 1 || batchSize > 5000) {
+        return NextResponse.json({ error: "queueBatchSize must be a whole number between 1 and 5000", developer: DEV_TAG }, { status: 400 })
+      }
+      if (!Number.isInteger(waitMinutes) || waitMinutes < 1 || waitMinutes > 60) {
+        return NextResponse.json({ error: "queueWaitMinutes must be a whole number between 1 and 60", developer: DEV_TAG }, { status: 400 })
+      }
+
+      const queueSessionTTL = waitMinutes * 60 // spotix-backend's queue reads this in seconds
+
+      await eventRef.update({
+        queueBatchSize: batchSize,
+        queueSessionTTL,
+        updatedAt: new Date(),
+        queueConfigAudit: FieldValue.arrayUnion({ ...auditEntry, queueBatchSize: batchSize, queueSessionTTL }),
+      })
+      return NextResponse.json({
+        success: true,
+        message: `Queue settings updated — ${batchSize} admitted at a time, ${waitMinutes} min to check out`,
+        developer: DEV_TAG,
+      }, { status: 200 })
+    }
+
+    if (action === "updatePricing") {
+      // platformPercentageFee: whole percent, 0-100 (e.g. 5 = 5%).
+      // platformFlatFee: naira amount, >= 0.
+      // Either can be sent as `null` to clear the override and fall back to
+      // the checkout's own defaults (5% / ₦0 respectively — see priceUtility.ts
+      // in spotix-user) instead of writing a literal number.
+      const { platformPercentageFee, platformFlatFee } = body
+
+      const pct = platformPercentageFee === null || platformPercentageFee === undefined
+        ? null
+        : Number(platformPercentageFee)
+      const flat = platformFlatFee === null || platformFlatFee === undefined
+        ? null
+        : Number(platformFlatFee)
+
+      if (pct !== null && (!Number.isFinite(pct) || pct < 0 || pct > 100)) {
+        return NextResponse.json({ error: "platformPercentageFee must be a number between 0 and 100", developer: DEV_TAG }, { status: 400 })
+      }
+      if (flat !== null && (!Number.isFinite(flat) || flat < 0)) {
+        return NextResponse.json({ error: "platformFlatFee must be a number of 0 or more", developer: DEV_TAG }, { status: 400 })
+      }
+
+      const updates: Record<string, unknown> = {
+        updatedAt: new Date(),
+        pricingAudit: FieldValue.arrayUnion({ ...auditEntry, platformPercentageFee: pct, platformFlatFee: flat }),
+      }
+      updates.platformPercentageFee = pct === null ? FieldValue.delete() : pct
+      updates.platformFlatFee = flat === null ? FieldValue.delete() : flat
+
+      await eventRef.update(updates)
+      return NextResponse.json({
+        success: true,
+        message: "Platform fee updated for this event",
+        platformPercentageFee: pct,
+        platformFlatFee: flat,
+        developer: DEV_TAG,
+      }, { status: 200 })
     }
 
     return NextResponse.json({ error: "Unknown action", developer: DEV_TAG }, { status: 400 })

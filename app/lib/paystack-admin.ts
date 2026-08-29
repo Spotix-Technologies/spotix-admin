@@ -30,6 +30,15 @@ async function backendFetch(path: string, init?: RequestInit) {
   if (!BACKEND_URL) throw new PaystackError("BACKEND_URL is not configured", 500)
   const res = await fetch(`${BACKEND_URL}${path}`, {
     ...init,
+    // Every call here proxies live wallet/transfer state (balance, Paystack's
+    // own transfer history, fee quotes). Next.js's fetch Data Cache defaults
+    // to `force-cache` and persists across requests independent of whether
+    // the calling route handler itself is dynamic — without this, the FIRST
+    // response ever fetched gets served back forever (a frozen snapshot),
+    // and neither pagination nor the manual refresh button in the Transfers
+    // UI can bust it. `no-store` forces every call to hit spotix-backend
+    // (which in turn hits Paystack directly) fresh, every time.
+    cache: "no-store",
     headers: {
       "x-internal-secret": process.env.CRON_SECRET ?? "",
       "Content-Type": "application/json",

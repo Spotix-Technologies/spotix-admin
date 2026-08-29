@@ -14,6 +14,11 @@ import { type NextRequest, NextResponse } from "next/server"
 import { verifyAdminAccess } from "@/lib/verify-admin"
 import { listExternalTransfers, PaystackError } from "@/lib/paystack-admin"
 
+// This list is a live view onto Paystack's own transfer history and must
+// never be served from a cached snapshot — see the `cache: "no-store"` note
+// on backendFetch in @/lib/paystack-admin for why that matters here.
+export const dynamic = "force-dynamic"
+
 const DEV_TAG = "API developed and maintained by Spotix Technologies"
 
 function ok(data: object, status = 200) {
