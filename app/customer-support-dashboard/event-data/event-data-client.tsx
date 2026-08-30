@@ -243,6 +243,7 @@ export function EventDataClient() {
           canManagePayouts={session?.role === "admin"}
           canModerate={session?.role === "admin"}
           canMatchReferrals={session?.role === "admin" || session?.role === "customer-support"}
+          canCreateAddons={session?.role === "customer-support" || session?.role === "exec-assistant"}
         />
       </div>
     )

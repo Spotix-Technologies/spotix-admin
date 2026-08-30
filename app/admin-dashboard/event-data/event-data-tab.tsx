@@ -5,14 +5,13 @@ import {
   MapPin, Calendar, Clock, Ticket, Users, TrendingUp, Heart,
   Flag, EyeOff, Eye, ShieldBan, Trash2, AlertTriangle,
   X, CheckCircle, DollarSign, Link2, Tag, Info, Wallet,
-  Loader2, AlertCircle, Percent, Settings2,
+  Loader2, AlertCircle, Percent, Settings2, Package,
 } from "lucide-react"
 import AdminAttendeesTab from "./admin-attendees-tab"
 import PassesTab from "./passes-tab"
 import ReferralsTab from "./referrals-tab"
+import AddonsTab from "./addons-tab"
 import AdminEventPayoutsPanel from "@/components/payout/admin-event-payouts-panel"
-import AdminEditPanel from "./admin-edit-panel"
-
 
 interface TicketTier {
   policy: string
@@ -65,18 +64,6 @@ interface EventData {
   createdAt: string | null
   updatedAt: string | null
   attendeeCount: number
-  discounts?: Array<{
-    id: string
-    code: string
-    type: "percentage" | "flat"
-    value: number
-    maxUses: number
-    usedCount: number
-    active: boolean
-    expiryDate?: string | null
-    applicableTickets?: string[] | null
-  }>
-  editHistory?: unknown[]
 }
 
 interface Props {
@@ -94,6 +81,10 @@ interface Props {
   canModerate: boolean
   /** Admin + customer-support can manually match a referral-less attendee to a referral code. */
   canMatchReferrals: boolean
+  /** Who can create/deactivate Addons from this dashboard — full admin
+   *  only here (see api/v1/event-data/addons). Everyone with this tab
+   *  can still view the list. */
+  canCreateAddons: boolean
 }
 
 /* ── Sub-components ── */
@@ -185,12 +176,12 @@ function ReasonTextarea({ value, onChange, placeholder }: { value: string; onCha
 }
 
 /* ── Main ── */
-export default function EventDataTab({ eventData, onUpdate, onDeleted, adminUsername, canManagePayouts, canModerate, canMatchReferrals }: Props) {
+export default function EventDataTab({ eventData, onUpdate, onDeleted, adminUsername, canManagePayouts, canModerate, canMatchReferrals, canCreateAddons }: Props) {
   const [event, setEvent] = useState(eventData)
   const [activeImage, setActiveImage] = useState(event.eventImage)
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null)
   const [saving, setSaving] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<"overview" | "attendees" | "payouts" | "passes" | "referrals" | "edit">("overview")
+  const [activeTab, setActiveTab] = useState<"overview" | "attendees" | "payouts" | "passes" | "referrals" | "addons">("overview")
 
   const [flagModal, setFlagModal] = useState(false)
   const [flagReason, setFlagReason] = useState("")
@@ -351,7 +342,7 @@ export default function EventDataTab({ eventData, onUpdate, onDeleted, adminUser
     try { return new Date(d).toLocaleDateString("en-NG", { weekday: "short", year: "numeric", month: "short", day: "numeric" }) }
     catch { return d }
   }
-  const money = (n: number) => `��${(n || 0).toLocaleString()}`
+  const money = (n: number) => `₦${(n || 0).toLocaleString()}`
   const tierRevenue = event.ticketPrices.reduce((s, t) => s + (parseInt(t.price) || 0) * (t.ticketsSold || 0), 0)
 
   // ── Platform fee — mirrors resolvePlatformFeeRates() in spotix-user's
@@ -384,7 +375,6 @@ export default function EventDataTab({ eventData, onUpdate, onDeleted, adminUser
         >
           Overview
         </button>
-        <button onClick={() => setActiveTab("edit")} className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all ${activeTab === "edit" ? "bg-white text-[#6b2fa5] shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>Edit event</button>
         <button
           onClick={() => setActiveTab("attendees")}
           className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all flex items-center gap-1.5 ${
@@ -432,39 +422,27 @@ export default function EventDataTab({ eventData, onUpdate, onDeleted, adminUser
           <Tag className="w-3.5 h-3.5" />
           Referrals
         </button>
+        <button
+          onClick={() => setActiveTab("addons")}
+          className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all flex items-center gap-1.5 ${
+            activeTab === "addons"
+              ? "bg-white text-[#6b2fa5] shadow-sm"
+              : "text-slate-500 hover:text-slate-700"
+          }`}
+        >
+          <Package className="w-3.5 h-3.5" />
+          Addons
+        </button>
       </div>
-
-      {activeTab === "edit" && (
-        <AdminEditPanel
-          event={event}
-          discounts={event.discounts}
-          onUpdate={(updated, discounts) => {
-            // AdminEditPanel's ticket-tier shape is intentionally looser
-            // (price/availableTickets as string | number) since it's driven
-            // by raw <input> values — normalize back to this file's stricter
-            // TicketTier (price/description/ticketsSold/availableTickets all
-            // required, price as string) before merging into EventData.
-            const next: EventData = {
-              ...event,
-              ...updated,
-              ticketPrices: updated.ticketPrices.map((t) => ({
-                policy: t.policy,
-                price: String(t.price ?? ""),
-                description: t.description ?? "",
-                ticketsSold: t.ticketsSold ?? 0,
-                availableTickets: Number(t.availableTickets ?? t.availability ?? 0) || 0,
-              })),
-              ...(discounts ? { discounts } : {}),
-            }
-            setEvent(next)
-            onUpdate(next)
-          }}
-        />
-      )}
 
       {/* Referrals tab */}
       {activeTab === "referrals" && (
         <ReferralsTab eventId={event.id} canMatch={canMatchReferrals} />
+      )}
+
+      {/* Addons tab */}
+      {activeTab === "addons" && (
+        <AddonsTab eventId={event.id} canCreate={canCreateAddons} />
       )}
 
       {/* Passes tab */}

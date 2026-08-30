@@ -5,11 +5,12 @@ import {
   MapPin, Calendar, Clock, Ticket, Users, TrendingUp, Heart,
   Flag, EyeOff, Eye, ShieldBan, Trash2, AlertTriangle,
   X, CheckCircle, DollarSign, Link2, Tag, Info, Wallet,
-  Loader2, AlertCircle,
+  Loader2, AlertCircle, Package,
 } from "lucide-react"
 import AdminAttendeesTab from "./admin-attendees-tab"
 import PassesTab from "./passes-tab"
 import ReferralsTab from "./referrals-tab"
+import AddonsTab from "./addons-tab"
 import AdminEventPayoutsPanel from "@/components/payout/admin-event-payouts-panel"
 
 interface TicketTier {
@@ -74,6 +75,11 @@ interface Props {
   canModerate: boolean
   /** Admin + customer-support can manually match a referral-less attendee to a referral code. */
   canMatchReferrals: boolean
+  /** customer-support + exec-assistant can create/deactivate Addons from
+   *  this dashboard (see api/v1/support-event-data/addons). Full admins
+   *  create theirs from the admin dashboard instead. Everyone with this
+   *  tab can still view the list. */
+  canCreateAddons: boolean
 }
 
 /* ── Sub-components ── */
@@ -165,12 +171,12 @@ function ReasonTextarea({ value, onChange, placeholder }: { value: string; onCha
 }
 
 /* ── Main ── */
-export default function EventDataTab({ eventData, onUpdate, onDeleted, adminUsername, canManagePayouts, canModerate, canMatchReferrals }: Props) {
+export default function EventDataTab({ eventData, onUpdate, onDeleted, adminUsername, canManagePayouts, canModerate, canMatchReferrals, canCreateAddons }: Props) {
   const [event, setEvent] = useState(eventData)
   const [activeImage, setActiveImage] = useState(event.eventImage)
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null)
   const [saving, setSaving] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<"overview" | "attendees" | "payouts" | "passes" | "referrals">("overview")
+  const [activeTab, setActiveTab] = useState<"overview" | "attendees" | "payouts" | "passes" | "referrals" | "addons">("overview")
 
   const [flagModal, setFlagModal] = useState(false)
   const [flagReason, setFlagReason] = useState("")
@@ -372,7 +378,23 @@ export default function EventDataTab({ eventData, onUpdate, onDeleted, adminUser
           <Tag className="w-3.5 h-3.5" />
           Referrals
         </button>
+        <button
+          onClick={() => setActiveTab("addons")}
+          className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all flex items-center gap-1.5 ${
+            activeTab === "addons"
+              ? "bg-white text-[#6b2fa5] shadow-sm"
+              : "text-slate-500 hover:text-slate-700"
+          }`}
+        >
+          <Package className="w-3.5 h-3.5" />
+          Addons
+        </button>
       </div>
+
+      {/* Addons tab */}
+      {activeTab === "addons" && (
+        <AddonsTab eventId={event.id} canCreate={canCreateAddons} />
+      )}
 
       {/* Referrals tab */}
       {activeTab === "referrals" && (
