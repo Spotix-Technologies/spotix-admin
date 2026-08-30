@@ -31,6 +31,26 @@ async function eventDocData(eventRef: FirebaseFirestore.DocumentReference) {
 function safeReason(reason: unknown): string | null {
   return typeof reason === "string" && reason.trim() ? reason : null
 }
+// Who pays Paystack's processing fee / Spotix's own platform fee for an
+// event, independently of each other. Mirrors resolveFeeBurden() in
+// spotix-user's priceUtility.ts — checkout is the source of truth for the
+// actual charge math; this just exposes/updates the same resolved state
+// for the admin toggle. Legacy events that predate this feature only have
+// `buyerBearsBurden`, which mapped `false` onto "organizer covers Spotix's
+// fee" under the old single-toggle model — Paystack's fee wasn't split out
+// yet, so it stays buyer-owed either way.
+function resolveFeeBurden(d: Record<string, unknown>): { coversPaystackFee: boolean; coversSpotixFee: boolean; paystackFeeAbsorbedBy: "organizer" | "spotix" } {
+  const fb = d.feeBurden
+  if (fb && typeof fb === "object") {
+    const f = fb as Record<string, unknown>
+    return {
+      coversPaystackFee: f.coversPaystackFee === true,
+      coversSpotixFee: f.coversSpotixFee === true,
+      paystackFeeAbsorbedBy: f.paystackFeeAbsorbedBy === "spotix" ? "spotix" : "organizer",
+    }
+  }
+  return { coversPaystackFee: false, coversSpotixFee: d.buyerBearsBurden === false, paystackFeeAbsorbedBy: "organizer" }
+}
 
 
 
@@ -142,9 +162,12 @@ export async function GET(request: NextRequest) {
 
       const d = eventDoc.data()!
       const eventRef = adminDb.collection("events").doc(eventId)
-      const attendeesSnap = await eventRef.collection("attendees").get()
-      const discountsSnap = await eventRef.collection("discounts").get()
-      const historySnap = await eventRef.collection("editHistory").orderBy("createdAt", "desc").limit(50).get()
+      const [attendeesCountSnap, discountsSnap, historySnap] = await Promise.all([
+        eventRef.collection("attendees").count().get(),
+        eventRef.collection("discounts").get(),
+        eventRef.collection("editHistory").orderBy("createdAt", "desc").limit(50).get(),
+      ])
+      const attendeeCount = attendeesCountSnap.data().count
 
       return NextResponse.json({
         success: true,
@@ -163,7 +186,7 @@ export async function GET(request: NextRequest) {
           eventType: d.eventType || "",
           isFree: d.isFree ?? false,
           ticketPrices: d.ticketPrices || [],
-          ticketsSold: d.ticketsSold ?? attendeesSnap.size,
+          ticketsSold: d.ticketsSold ?? attendeeCount,
           revenue: d.revenue ?? 0,
           totalRevenue: d.totalRevenue ?? 0,
           paidAmount: d.paidAmount ?? 0,
@@ -189,9 +212,13 @@ export async function GET(request: NextRequest) {
           platformPercentageFee:
             typeof d.platformPercentageFee === "number" ? d.platformPercentageFee : null,
           platformFlatFee: typeof d.platformFlatFee === "number" ? d.platformFlatFee : null,
+          // Who bears Paystack's processing fee / Spotix's own platform fee
+          // for this event — independent of the fee amounts above. See
+          // resolveFeeBurden() just above.
+          feeBurden: resolveFeeBurden(d),
           createdAt: d.createdAt?.toDate?.()?.toISOString() || null,
           updatedAt: d.updatedAt?.toDate?.()?.toISOString() || null,
-          attendeeCount: attendeesSnap.size,
+          attendeeCount,
           discounts: discountsSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() })),
           editHistory: historySnap.docs.map((doc) => ({ id: doc.id, ...doc.data(), createdAt: doc.data().createdAt?.toDate?.()?.toISOString() || null })),
         },
@@ -236,7 +263,7 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: "eventId and action are required", developer: DEV_TAG }, { status: 400 })
     }
 
-    if (["flag", "setStatus", "suspend", "updatePricing"].includes(action) && !isFullAdmin) {
+    if (["flag", "setStatus", "suspend", "updatePricing", "updateFeeBurden"].includes(action) && !isFullAdmin) {
       return NextResponse.json({ error: "Forbidden: admin access required", developer: DEV_TAG }, { status: 403 })
     }
     const requiresReason = action !== "addDiscount" && action !== "editDiscount" && action !== "toggleDiscount" && action !== "deleteDiscount"
@@ -403,6 +430,55 @@ export async function PATCH(request: NextRequest) {
         message: "Platform fee updated for this event",
         platformPercentageFee: pct,
         platformFlatFee: flat,
+        developer: DEV_TAG,
+      }, { status: 200 })
+    }
+
+    if (action === "updateFeeBurden") {
+      // Independent of platformPercentageFee/platformFlatFee above — this
+      // controls who PAYS the fees, not their size. coversPaystackFee: true
+      // means the buyer is never charged Paystack's processing fee for this
+      // event again. Who actually absorbs it is the separate
+      // paystackFeeAbsorbedBy field:
+      //  - "organizer" (default): deducted from the organizer's payout
+      //    balance (see organizerPaystackFeeCost in spotix-user's
+      //    priceUtility.ts / computeOrderPricing, which spotix-backend's
+      //    admin-sales step reads at payout time).
+      //  - "spotix": the organizer's payout is left untouched; the
+      //    shortfall comes out of Spotix's own platform-fee margin instead.
+      //    Only settable from here — organizers can offer to cover the fee
+      //    themselves, but can't shift it onto Spotix's books.
+      // Spotix's own platform fee is untouched by either of these — it's
+      // still charged to the buyer unless coversSpotixFee is separately set.
+      const { coversPaystackFee, paystackFeeAbsorbedBy } = body
+      if (typeof coversPaystackFee !== "boolean") {
+        return NextResponse.json({ error: "coversPaystackFee (boolean) required", developer: DEV_TAG }, { status: 400 })
+      }
+      if (paystackFeeAbsorbedBy !== undefined && !["organizer", "spotix"].includes(paystackFeeAbsorbedBy)) {
+        return NextResponse.json({ error: "paystackFeeAbsorbedBy must be 'organizer' or 'spotix'", developer: DEV_TAG }, { status: 400 })
+      }
+
+      const before = await eventDocData(eventRef)
+      const current = resolveFeeBurden(before)
+      const feeBurden = {
+        ...current,
+        coversPaystackFee,
+        paystackFeeAbsorbedBy: paystackFeeAbsorbedBy ?? current.paystackFeeAbsorbedBy,
+      }
+
+      await eventRef.update({
+        feeBurden,
+        updatedAt: new Date(),
+        feeBurdenAudit: FieldValue.arrayUnion({ ...auditEntry, feeBurden }),
+      })
+      return NextResponse.json({
+        success: true,
+        message: !coversPaystackFee
+          ? "Attendees are charged Paystack's fee again for this event"
+          : feeBurden.paystackFeeAbsorbedBy === "spotix"
+            ? "Spotix now absorbs Paystack's fee for this event — attendees pay only the platform fee, and the organizer's payout is unaffected"
+            : "The organizer now absorbs Paystack's fee for this event — attendees pay only the platform fee",
+        feeBurden,
         developer: DEV_TAG,
       }, { status: 200 })
     }

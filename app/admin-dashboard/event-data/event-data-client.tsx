@@ -56,9 +56,25 @@ interface EventData {
   stopDate: string | null
   platformPercentageFee: number | null
   platformFlatFee: number | null
+  feeBurden: {
+    coversPaystackFee: boolean
+    coversSpotixFee: boolean
+    paystackFeeAbsorbedBy: "organizer" | "spotix"
+  }
   createdAt: string | null
   updatedAt: string | null
   attendeeCount: number
+  discounts?: Array<{
+    id: string
+    code: string
+    type: "percentage" | "flat"
+    value: number
+    maxUses: number
+    usedCount: number
+    active: boolean
+    applicableTickets?: string[] | null
+    expiryDate?: string | null
+  }>
 }
 
 type ViewState = "list" | "eventDetails" | "deletedEvents"
@@ -246,6 +262,7 @@ export function EventDataClient() {
           canModerate={session?.role === "admin"}
           canMatchReferrals={session?.role === "admin" || session?.role === "customer-support"}
           canCreateAddons={session?.role === "admin"}
+          canEditEvent={session?.role === "admin" || session?.role === "customer-support"}
         />
       </div>
     )

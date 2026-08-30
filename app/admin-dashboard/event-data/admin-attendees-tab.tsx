@@ -1,9 +1,10 @@
 "use client"
 
-import { useState, useMemo, useEffect } from "react"
+import { useState, useMemo, useEffect, useRef } from "react"
 import {
   Users, Download, FileJson, FileText, Search,
   Filter, X, Loader2, AlertCircle, Key, CheckCircle, Copy, Eye, EyeOff,
+  UserPlus, Ticket, ChevronDown,
 } from "lucide-react"
 
 interface AttendeeData {
@@ -18,9 +19,19 @@ interface AttendeeData {
   faceEmbedding?: number[] | null
 }
 
+interface TicketTier {
+  policy: string
+  price: string
+}
+
 interface Props {
   eventId: string
   eventName: string
+  /** Canonical ticket types/prices for this event — powers the "Add
+   *  attendee" dialog's ticket type dropdown. Optional so existing
+   *  callers that haven't been updated yet still compile; the dialog
+   *  just won't have any ticket types to offer until it's passed. */
+  ticketPrices?: TicketTier[]
 }
 
 type Step = "format" | "generating" | "key-reveal" | "done"
@@ -336,36 +347,382 @@ function RegistryDialog({
   )
 }
 
-// ── Main Component ─────────────────────────────────────────────────────────────
-export default function AdminAttendeesTab({ eventId, eventName }: Props) {
-  const [attendees, setAttendees] = useState<AttendeeData[]>([])
-  const [loading, setLoading] = useState(true)
+/**
+ * Add Attendee dialog — manually issues ticket(s) for a walk-in / offline
+ * / comped attendee. Posts to /api/v1/event-data/attendees, which writes
+ * a Reference doc pre-marked "successful" and hands it to spotix-backend's
+ * POST /v1/ticket — the same generateTickets() pipeline every Paystack
+ * purchase goes through, so the resulting ticket(s) and attendee row are
+ * indistinguishable from a normal sale.
+ */
+function AddAttendeeDialog({
+  open,
+  onClose,
+  onIssued,
+  eventId,
+  ticketPrices,
+}: {
+  open: boolean
+  onClose: () => void
+  onIssued: () => void
+  eventId: string
+  ticketPrices: TicketTier[]
+}) {
+  const [fullName, setFullName] = useState("")
+  const [email, setEmail] = useState("")
+  const [phone, setPhone] = useState("")
+  const [ticketType, setTicketType] = useState(ticketPrices[0]?.policy ?? "")
+  const [quantity, setQuantity] = useState(1)
+  const [referralCode, setReferralCode] = useState("")
+  const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [issued, setIssued] = useState<{ ticketIds: string[]; totalTickets: number } | null>(null)
+
+  if (!open) return null
+
+  const reset = () => {
+    setFullName("")
+    setEmail("")
+    setPhone("")
+    setTicketType(ticketPrices[0]?.policy ?? "")
+    setQuantity(1)
+    setReferralCode("")
+    setError(null)
+    setIssued(null)
+  }
+
+  const handleClose = () => {
+    onClose()
+    setTimeout(reset, 200)
+  }
+
+  const handleSubmit = async () => {
+    if (!fullName.trim() || !email.trim() || !ticketType) return
+    setSubmitting(true)
+    setError(null)
+    try {
+      const res = await fetch("/api/v1/event-data/attendees", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          eventId,
+          fullName: fullName.trim(),
+          email: email.trim(),
+          phone: phone.trim(),
+          ticketType,
+          quantity,
+          referralCode: referralCode.trim() || null,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok || !data.success) throw new Error(data.error ?? `Server returned ${res.status}`)
+
+      setIssued({ ticketIds: data.ticketIds ?? [], totalTickets: data.totalTickets ?? quantity })
+      onIssued()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to add attendee")
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={submitting ? undefined : handleClose} />
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
+        {!issued ? (
+          <>
+            <div className="flex items-center justify-between px-6 py-5 border-b border-slate-100">
+              <div>
+                <h3 className="text-lg font-bold text-slate-900">Add Attendee</h3>
+                <p className="text-sm text-slate-500 mt-0.5">Manually issue a ticket for this event</p>
+              </div>
+              <button
+                onClick={handleClose}
+                disabled={submitting}
+                className="p-2 hover:bg-slate-100 rounded-xl transition-all disabled:opacity-40"
+              >
+                <X size={20} className="text-slate-500" />
+              </button>
+            </div>
+
+            <div className="px-6 py-5 space-y-4 max-h-[65vh] overflow-y-auto">
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1.5">Full Name</label>
+                <input
+                  type="text"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  placeholder="e.g. Jane Doe"
+                  className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#6b2fa5/30] focus:border-[#6b2fa5] placeholder:text-slate-400"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1.5">Email</label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="e.g. jane@example.com"
+                  className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#6b2fa5/30] focus:border-[#6b2fa5] placeholder:text-slate-400"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1.5">Phone (optional)</label>
+                <input
+                  type="tel"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="e.g. 08012345678"
+                  className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#6b2fa5/30] focus:border-[#6b2fa5] placeholder:text-slate-400"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1.5">Ticket Type</label>
+                  <div className="relative">
+                    <select
+                      value={ticketType}
+                      onChange={(e) => setTicketType(e.target.value)}
+                      disabled={ticketPrices.length === 0}
+                      className="w-full pl-3.5 pr-8 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#6b2fa5/30] appearance-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {ticketPrices.length === 0 && <option value="">No ticket types</option>}
+                      {ticketPrices.map((t) => (
+                        <option key={t.policy} value={t.policy}>
+                          {t.policy} (₦{Number(t.price).toLocaleString()})
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1.5">Quantity</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={20}
+                    value={quantity}
+                    onChange={(e) => setQuantity(Math.max(1, Math.min(20, Number(e.target.value) || 1)))}
+                    className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#6b2fa5/30] focus:border-[#6b2fa5]"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1.5">Referral (optional)</label>
+                <input
+                  type="text"
+                  value={referralCode}
+                  onChange={(e) => setReferralCode(e.target.value)}
+                  placeholder="Referral code, if any"
+                  className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#6b2fa5/30] focus:border-[#6b2fa5] placeholder:text-slate-400"
+                />
+              </div>
+
+              {error && (
+                <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-xl p-3">
+                  <AlertCircle size={14} className="text-red-500 flex-shrink-0 mt-0.5" />
+                  <p className="text-xs text-red-700">{error}</p>
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center gap-3 px-6 py-4 border-t border-slate-100 bg-slate-50">
+              <button
+                onClick={handleClose}
+                disabled={submitting}
+                className="flex-1 py-2.5 px-4 rounded-xl border-2 border-slate-200 text-slate-700 font-semibold text-sm hover:bg-white transition-all disabled:opacity-40"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSubmit}
+                disabled={submitting || !fullName.trim() || !email.trim() || !ticketType}
+                className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl font-semibold text-sm transition-all ${
+                  submitting || !fullName.trim() || !email.trim() || !ticketType
+                    ? "bg-slate-200 text-slate-400 cursor-not-allowed"
+                    : "bg-[#6b2fa5] text-white hover:bg-[#5a2589] shadow-lg shadow-[#6b2fa5/30]"
+                }`}
+              >
+                {submitting ? (
+                  <><Loader2 size={16} className="animate-spin" /> Issuing...</>
+                ) : (
+                  <><Ticket size={16} /> Add Attendee</>
+                )}
+              </button>
+            </div>
+          </>
+        ) : (
+          <div className="px-6 py-10 flex flex-col items-center gap-4 text-center">
+            <div className="w-14 h-14 rounded-full bg-green-100 flex items-center justify-center">
+              <CheckCircle size={28} className="text-green-600" />
+            </div>
+            <div>
+              <h3 className="text-lg font-bold text-slate-900">
+                {issued.totalTickets} ticket{issued.totalTickets !== 1 ? "s" : ""} issued
+              </h3>
+              <p className="text-sm text-slate-500 mt-1">
+                {fullName} has been added to the attendee list.
+              </p>
+            </div>
+            <button
+              onClick={handleClose}
+              className="mt-2 px-8 py-2.5 rounded-xl bg-[#6b2fa5] text-white font-semibold text-sm hover:bg-[#5a2589] transition-all"
+            >
+              Done
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ── Main Component ─────────────────────────────────────────────────────────────
+export default function AdminAttendeesTab({ eventId, eventName, ticketPrices = [] }: Props) {
+  // Paginated browse state — what's actually been read from the server so far.
+  const [items, setItems] = useState<AttendeeData[]>([])
+  const [cursor, setCursor] = useState<string | null>(null)
+  const [hasMore, setHasMore] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  // Aggregate stats from the server (cheap count() queries — accurate
+  // regardless of how many rows are currently loaded on screen).
+  const [totalCount, setTotalCount] = useState(0)
+  const [verifiedCount, setVerifiedCount] = useState(0)
+  const [unverifiedCount, setUnverifiedCount] = useState(0)
+
   const [searchTerm, setSearchTerm] = useState("")
   const [verificationFilter, setVerificationFilter] = useState<"all" | "verified" | "unverified">("all")
   const [registryDialogOpen, setRegistryDialogOpen] = useState(false)
+  const [exporting, setExporting] = useState(false)
+  const [addAttendeeDialogOpen, setAddAttendeeDialogOpen] = useState(false)
 
+  // Search — searches the FULL roster, not just what's paginated in. Fetched
+  // once on first search (or export) and cached for the rest of the tab's
+  // lifetime so repeated typing/downloads don't re-fetch every time.
+  const [fullRoster, setFullRoster] = useState<AttendeeData[] | null>(null)
+  const [searchingFullRoster, setSearchingFullRoster] = useState(false)
+  const rosterFetchStarted = useRef(false)
+
+  const baseUrl = "/api/v1/event-data/attendees"
+
+  // ── Initial page load: first 15 attendees only ──
   useEffect(() => {
-    const load = async () => {
+    let cancelled = false
+    setItems([])
+    setCursor(null)
+    setFullRoster(null)
+    rosterFetchStarted.current = false
+    async function loadFirstPage() {
       setLoading(true)
       setError(null)
       try {
-        const res = await fetch(`/api/v1/event-data/attendees?eventId=${eventId}`)
+        const res = await fetch(`${baseUrl}?eventId=${eventId}&limit=15`)
         const json = await res.json()
-        if (!res.ok) throw new Error(json.error || "Failed to load attendees")
-        setAttendees(json.attendees || [])
+        if (!res.ok || !json.success) throw new Error(json.error || "Failed to load attendees")
+        if (cancelled) return
+        setItems(json.attendees ?? [])
+        setCursor(json.nextCursor ?? null)
+        setHasMore(Boolean(json.hasMore))
+        setTotalCount(json.totalCount ?? 0)
+        setVerifiedCount(json.verifiedCount ?? 0)
+        setUnverifiedCount(json.unverifiedCount ?? 0)
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Failed to load attendees")
+        if (!cancelled) setError(e instanceof Error ? e.message : "Failed to load attendees")
       } finally {
-        setLoading(false)
+        if (!cancelled) setLoading(false)
       }
     }
-    load()
+    loadFirstPage()
+    return () => { cancelled = true }
   }, [eventId])
 
+  // ── Refresh after a manually-issued attendee — re-pulls the first page
+  // and drops the cached full roster so search/export pick up the new row. ──
+  const refreshAfterAdd = async () => {
+    setFullRoster(null)
+    rosterFetchStarted.current = false
+    try {
+      const res = await fetch(`${baseUrl}?eventId=${eventId}&limit=15`)
+      const json = await res.json()
+      if (!res.ok || !json.success) throw new Error(json.error || "Failed to refresh attendees")
+      setItems(json.attendees ?? [])
+      setCursor(json.nextCursor ?? null)
+      setHasMore(Boolean(json.hasMore))
+      setTotalCount(json.totalCount ?? 0)
+      setVerifiedCount(json.verifiedCount ?? 0)
+      setUnverifiedCount(json.unverifiedCount ?? 0)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to refresh attendees")
+    }
+  }
+
+  // ── Load 15 more ──
+  const handleLoadMore = async () => {
+    if (!cursor || loadingMore) return
+    setLoadingMore(true)
+    try {
+      const res = await fetch(`${baseUrl}?eventId=${eventId}&limit=15&cursor=${encodeURIComponent(cursor)}`)
+      const json = await res.json()
+      if (!res.ok || !json.success) throw new Error(json.error || "Failed to load more attendees")
+      setItems((prev) => [...prev, ...(json.attendees ?? [])])
+      setCursor(json.nextCursor ?? null)
+      setHasMore(Boolean(json.hasMore))
+      setTotalCount(json.totalCount ?? totalCount)
+      setVerifiedCount(json.verifiedCount ?? verifiedCount)
+      setUnverifiedCount(json.unverifiedCount ?? unverifiedCount)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to load more attendees")
+    } finally {
+      setLoadingMore(false)
+    }
+  }
+
+  // ── Fetch the full roster once a search is actually typed in, or an
+  // export is requested — both genuinely need every record. ──
+  const ensureFullRoster = async () => {
+    if (fullRoster || rosterFetchStarted.current) return fullRoster
+    rosterFetchStarted.current = true
+    setSearchingFullRoster(true)
+    try {
+      const res = await fetch(`${baseUrl}?eventId=${eventId}&all=true`)
+      const json = await res.json()
+      if (!res.ok || !json.success) throw new Error(json.error || "Search failed")
+      setFullRoster(json.attendees ?? [])
+      return json.attendees ?? []
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Search failed")
+      rosterFetchStarted.current = false // allow retry
+      return null
+    } finally {
+      setSearchingFullRoster(false)
+    }
+  }
+
+  useEffect(() => {
+    if (searchTerm.trim()) { ensureFullRoster() }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchTerm])
+
+  const isSearching = searchTerm.trim().length > 0
+
+  // While actively searching, filter over the full roster (once it's
+  // arrived). Otherwise, show whatever's been paginated in so far.
+  const sourceList = isSearching ? (fullRoster ?? []) : items
+
   const filtered = useMemo(() => {
-    return attendees.filter((a) => {
+    return sourceList.filter((a) => {
       const matchesSearch =
+        !isSearching ||
         a.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
         a.fullName.toLowerCase().includes(searchTerm.toLowerCase())
       const matchesFilter =
@@ -374,7 +731,7 @@ export default function AdminAttendeesTab({ eventId, eventName }: Props) {
         (verificationFilter === "unverified" && !a.verified)
       return matchesSearch && matchesFilter
     })
-  }, [attendees, searchTerm, verificationFilter])
+  }, [sourceList, searchTerm, verificationFilter, isSearching])
 
   const triggerDownload = (blob: Blob, fileName: string) => {
     const url = URL.createObjectURL(blob)
@@ -386,43 +743,50 @@ export default function AdminAttendeesTab({ eventId, eventName }: Props) {
   }
 
   /**
-   * Matches spotix-booker's attendees-tab export exactly:
-   *  - JSON is wrapped in an { eventId, eventName, guests } envelope so the
-   *    Scanner can store them against the imported guest list. The sync key
-   *    itself is never embedded in the file — it's shown once, separately.
-   *  - CSV is the full per-ticket row export — no de-duplication, no
-   *    purchase-count toggle.
+   * Export always needs the COMPLETE guest list, so it fetches (or reuses
+   * the already-cached) full roster regardless of how many rows are
+   * currently paginated into view — same as spotix-booker's attendees-tab.
    */
-  const handleExport = (format: "json" | "csv") => {
-    const exportData = attendees.map((a) => ({
-      fullName: a.fullName,
-      email: a.email,
-      ticketId: a.id,
-      ticketType: a.ticketType,
-      facialEnroll: a.facialEnroll,
-      ...(a.faceEmbedding ? { faceEmbedding: a.faceEmbedding } : {}),
-    }))
+  const handleExport = async (format: "json" | "csv") => {
+    setExporting(true)
+    try {
+      const all = fullRoster ?? (await ensureFullRoster())
+      if (!all) throw new Error("Failed to load attendees for export")
 
-    const fileName = `spotix_${eventId}`
+      const exportData = all.map((a: AttendeeData) => ({
+        fullName: a.fullName,
+        email: a.email,
+        ticketId: a.id,
+        ticketType: a.ticketType,
+        facialEnroll: a.facialEnroll,
+        ...(a.faceEmbedding ? { faceEmbedding: a.faceEmbedding } : {}),
+      }))
 
-    if (format === "json") {
-      const envelope = { eventId, eventName, guests: exportData }
-      const blob = new Blob([JSON.stringify(envelope, null, 2)], { type: "application/json" })
-      triggerDownload(blob, `${fileName}.json`)
-    } else {
-      const headers = ["fullName", "email", "ticketId", "ticketType", "facialEnroll", "faceEmbedding"]
-      const rows = exportData.map((row) =>
-        headers
-          .map((h) => {
-            const value = row[h as keyof typeof row]
-            if (Array.isArray(value)) return `"${(value as number[]).join("|")}"`
-            return `"${String(value ?? "").replace(/"/g, '""')}"`
-          })
-          .join(",")
-      )
-      const csv = [headers.join(","), ...rows].join("\n")
-      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" })
-      triggerDownload(blob, `${fileName}.csv`)
+      const fileName = `spotix_${eventId}`
+
+      if (format === "json") {
+        const envelope = { eventId, eventName, guests: exportData }
+        const blob = new Blob([JSON.stringify(envelope, null, 2)], { type: "application/json" })
+        triggerDownload(blob, `${fileName}.json`)
+      } else {
+        const headers = ["fullName", "email", "ticketId", "ticketType", "facialEnroll", "faceEmbedding"]
+        const rows = exportData.map((row: (typeof exportData)[number]) =>
+          headers
+            .map((h) => {
+              const value = row[h as keyof typeof row]
+              if (Array.isArray(value)) return `"${(value as number[]).join("|")}"`
+              return `"${String(value ?? "").replace(/"/g, '""')}"`
+            })
+            .join(",")
+        )
+        const csv = [headers.join(","), ...rows].join("\n")
+        const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" })
+        triggerDownload(blob, `${fileName}.csv`)
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Export failed")
+    } finally {
+      setExporting(false)
     }
   }
 
@@ -432,17 +796,6 @@ export default function AdminAttendeesTab({ eventId, eventName }: Props) {
         <div className="text-center space-y-3">
           <Loader2 className="w-7 h-7 animate-spin text-[#6b2fa5] mx-auto" />
           <p className="text-sm text-slate-500">Loading attendees…</p>
-        </div>
-      </div>
-    )
-  }
-
-  if (error) {
-    return (
-      <div className="flex items-center justify-center py-16">
-        <div className="text-center space-y-2">
-          <AlertCircle className="w-8 h-8 text-red-400 mx-auto" />
-          <p className="text-sm text-red-500 font-medium">{error}</p>
         </div>
       </div>
     )
@@ -459,8 +812,11 @@ export default function AdminAttendeesTab({ eventId, eventName }: Props) {
             placeholder="Search by name or email…"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#6b2fa5/30] focus:border-[#6b2fa5] placeholder:text-slate-400"
+            className="w-full pl-10 pr-9 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#6b2fa5/30] focus:border-[#6b2fa5] placeholder:text-slate-400"
           />
+          {isSearching && searchingFullRoster && (
+            <Loader2 size={16} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[#6b2fa5] animate-spin" />
+          )}
         </div>
         <div className="relative md:w-52">
           <Filter className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
@@ -475,32 +831,42 @@ export default function AdminAttendeesTab({ eventId, eventName }: Props) {
           </select>
         </div>
         <button
+          onClick={() => setAddAttendeeDialogOpen(true)}
+          className="flex items-center justify-center gap-2 px-4 py-2.5 bg-white border-2 border-[#6b2fa5/20] text-[#6b2fa5] font-semibold text-sm rounded-xl hover:bg-[#6b2fa5/5] transition-all whitespace-nowrap"
+        >
+          <UserPlus size={16} />
+          Add Attendee
+        </button>
+        <button
           onClick={() => setRegistryDialogOpen(true)}
-          disabled={attendees.length === 0}
+          disabled={totalCount === 0 || exporting}
           className="flex items-center justify-center gap-2 px-4 py-2.5 bg-[#6b2fa5] text-white font-semibold text-sm rounded-xl shadow-lg shadow-[#6b2fa5/25] hover:bg-[#5a2589] transition-all disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
         >
-          <Download size={16} />
+          {exporting ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
           Download
         </button>
       </div>
 
-      {/* Stats */}
+      {error && (
+        <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-xl p-3">
+          <AlertCircle size={14} className="text-red-500 flex-shrink-0 mt-0.5" />
+          <p className="text-xs text-red-700">{error}</p>
+        </div>
+      )}
+
+      {/* Stats — from server aggregates, accurate even before everything's loaded */}
       <div className="grid grid-cols-3 gap-3">
         <div className="bg-gradient-to-br from-[#6b2fa5] to-[#7d35c0] rounded-xl p-4 text-white shadow-lg shadow-[#6b2fa5/20]">
           <p className="text-xs font-medium text-white/80">Total</p>
-          <p className="text-2xl font-bold mt-0.5">{attendees.length}</p>
+          <p className="text-2xl font-bold mt-0.5">{totalCount}</p>
         </div>
         <div className="bg-white rounded-xl p-4 border border-slate-200 shadow-sm">
           <p className="text-xs font-medium text-slate-500">Verified</p>
-          <p className="text-2xl font-bold text-emerald-600 mt-0.5">
-            {attendees.filter((a) => a.verified).length}
-          </p>
+          <p className="text-2xl font-bold text-emerald-600 mt-0.5">{verifiedCount}</p>
         </div>
         <div className="bg-white rounded-xl p-4 border border-slate-200 shadow-sm">
           <p className="text-xs font-medium text-slate-500">Pending</p>
-          <p className="text-2xl font-bold text-amber-500 mt-0.5">
-            {attendees.filter((a) => !a.verified).length}
-          </p>
+          <p className="text-2xl font-bold text-amber-500 mt-0.5">{unverifiedCount}</p>
         </div>
       </div>
 
@@ -592,15 +958,40 @@ export default function AdminAttendeesTab({ eventId, eventName }: Props) {
             </tbody>
           </table>
         </div>
+
+        {/* Load more — only shown in the default (non-search) paginated view */}
+        {!isSearching && hasMore && (
+          <div className="flex justify-center py-4 border-t border-slate-100">
+            <button
+              onClick={handleLoadMore}
+              disabled={loadingMore}
+              className="flex items-center gap-2 px-5 py-2 rounded-xl border-2 border-[#6b2fa5/20] text-[#6b2fa5] text-sm font-semibold hover:bg-[#6b2fa5/5] transition-colors disabled:opacity-50"
+            >
+              {loadingMore ? (
+                <><Loader2 size={16} className="animate-spin" /> Loading…</>
+              ) : (
+                <>Load 15 more ({items.length} of {totalCount})</>
+              )}
+            </button>
+          </div>
+        )}
       </div>
 
       <RegistryDialog
         open={registryDialogOpen}
         onClose={() => setRegistryDialogOpen(false)}
         onExport={handleExport}
-        attendeeCount={attendees.length}
+        attendeeCount={totalCount}
         eventId={eventId}
         eventName={eventName}
+      />
+
+      <AddAttendeeDialog
+        open={addAttendeeDialogOpen}
+        onClose={() => setAddAttendeeDialogOpen(false)}
+        onIssued={refreshAfterAdd}
+        eventId={eventId}
+        ticketPrices={ticketPrices}
       />
     </div>
   )

@@ -11,7 +11,9 @@ import AdminAttendeesTab from "./admin-attendees-tab"
 import PassesTab from "./passes-tab"
 import ReferralsTab from "./referrals-tab"
 import AddonsTab from "./addons-tab"
+import AdminEditPanel from "./admin-edit-panel"
 import AdminEventPayoutsPanel from "@/components/payout/admin-event-payouts-panel"
+import type { DiscountData, EventLike } from "./admin-edit/types"
 
 interface TicketTier {
   policy: string
@@ -61,9 +63,23 @@ interface EventData {
   /** null = not overridden — checkout falls back to ₦0, NOT the ₦100
    *  system default (an unset flat fee means one was deliberately not added). */
   platformFlatFee: number | null
+  /** Who pays Paystack's processing fee / Spotix's own platform fee for
+   *  this event — independent of the fee amounts above. See
+   *  resolveFeeBurden() in spotix-user's priceUtility.ts. */
+  feeBurden: {
+    coversPaystackFee: boolean
+    coversSpotixFee: boolean
+    /** Only meaningful when coversPaystackFee is true. "organizer" (default)
+     *  deducts it from the organizer's payout; "spotix" leaves the
+     *  organizer's payout untouched and Spotix absorbs it instead. */
+    paystackFeeAbsorbedBy: "organizer" | "spotix"
+  }
   createdAt: string | null
   updatedAt: string | null
   attendeeCount: number
+  /** Populated by GET ?action=getEventDetails. Kept optional so existing
+   *  callers that don't pass it (or haven't loaded it yet) still compile. */
+  discounts?: DiscountData[]
 }
 
 interface Props {
@@ -85,6 +101,11 @@ interface Props {
    *  only here (see api/v1/event-data/addons). Everyone with this tab
    *  can still view the list. */
   canCreateAddons: boolean
+  /** Admin + customer-support can edit core event fields and manage discount
+   *  codes — matches the PATCH route's allowed roles for editEvent/
+   *  addDiscount/editDiscount/toggleDiscount/deleteDiscount. exec-assistant
+   *  doesn't get this tab at all, same reasoning as canModerate above. */
+  canEditEvent: boolean
 }
 
 /* ── Sub-components ── */
@@ -176,12 +197,13 @@ function ReasonTextarea({ value, onChange, placeholder }: { value: string; onCha
 }
 
 /* ── Main ── */
-export default function EventDataTab({ eventData, onUpdate, onDeleted, adminUsername, canManagePayouts, canModerate, canMatchReferrals, canCreateAddons }: Props) {
+export default function EventDataTab({ eventData, onUpdate, onDeleted, adminUsername, canManagePayouts, canModerate, canMatchReferrals, canCreateAddons, canEditEvent }: Props) {
   const [event, setEvent] = useState(eventData)
+  const [discounts, setDiscounts] = useState<DiscountData[]>(eventData.discounts ?? [])
   const [activeImage, setActiveImage] = useState(event.eventImage)
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null)
   const [saving, setSaving] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<"overview" | "attendees" | "payouts" | "passes" | "referrals" | "addons">("overview")
+  const [activeTab, setActiveTab] = useState<"overview" | "attendees" | "payouts" | "passes" | "referrals" | "addons" | "editEvent">("overview")
 
   const [flagModal, setFlagModal] = useState(false)
   const [flagReason, setFlagReason] = useState("")
@@ -200,6 +222,9 @@ export default function EventDataTab({ eventData, onUpdate, onDeleted, adminUser
   const [pctFeeInput, setPctFeeInput] = useState("5")
   const [flatFeeInput, setFlatFeeInput] = useState("0")
   const [pricingReason, setPricingReason] = useState("")
+  const [feeBurdenModal, setFeeBurdenModal] = useState(false)
+  const [feeBurdenReason, setFeeBurdenReason] = useState("")
+  const [paystackPayerChoice, setPaystackPayerChoice] = useState<"attendee" | "organizer" | "spotix">("attendee")
   const [deleteModal, setDeleteModal] = useState(false)
   const [deleteConfirmText, setDeleteConfirmText] = useState("")
   const [deleteReason, setDeleteReason] = useState("")
@@ -320,6 +345,59 @@ export default function EventDataTab({ eventData, onUpdate, onDeleted, adminUser
     finally { setSaving(null) }
   }
 
+  const currentPaystackPayer: "attendee" | "organizer" | "spotix" = !event.feeBurden.coversPaystackFee
+    ? "attendee"
+    : event.feeBurden.paystackFeeAbsorbedBy
+
+  const handleUpdateFeeBurdenConfirm = async () => {
+    if (!feeBurdenReason.trim()) return
+    setSaving("feeBurden")
+    try {
+      const coversPaystackFee = paystackPayerChoice !== "attendee"
+      const payload: Record<string, unknown> = { coversPaystackFee }
+      if (coversPaystackFee) payload.paystackFeeAbsorbedBy = paystackPayerChoice
+      await patchEvent("updateFeeBurden", payload, feeBurdenReason)
+      const updated = {
+        ...event,
+        feeBurden: {
+          ...event.feeBurden,
+          coversPaystackFee,
+          paystackFeeAbsorbedBy: coversPaystackFee ? (paystackPayerChoice as "organizer" | "spotix") : event.feeBurden.paystackFeeAbsorbedBy,
+        },
+      }
+      setEvent(updated); onUpdate(updated)
+      setFeeBurdenModal(false); setFeeBurdenReason("")
+      showToast(
+        paystackPayerChoice === "attendee"
+          ? "Attendees are charged Paystack's fee again"
+          : paystackPayerChoice === "spotix"
+            ? "Spotix now absorbs Paystack's fee — organizer's payout is unaffected"
+            : "The organizer now absorbs Paystack's fee, deducted from their payout",
+        "success"
+      )
+    } catch (e) { showToast(e instanceof Error ? e.message : "Failed", "error") }
+    finally { setSaving(null) }
+  }
+
+  /**
+   * Bridges AdminEditPanel's onUpdate(event, discounts) into this
+   * component's own `event`/`discounts` state and up to the parent
+   * (event-data-client.tsx) via the existing onUpdate prop — same
+   * "setEvent then onUpdate" pattern the other handlers above use.
+   */
+  const handleEditPanelUpdate = (updatedEvent: EventLike, updatedDiscounts?: DiscountData[]) => {
+    const merged = { ...event, ...updatedEvent } as EventData
+    if (merged.ticketPrices) {
+      merged.ticketPrices = merged.ticketPrices.map(tier => ({
+        ...tier,
+        price: String(tier.price)
+      }))
+    }
+    setEvent(merged)
+    if (updatedDiscounts) setDiscounts(updatedDiscounts)
+    onUpdate({ ...merged, discounts: updatedDiscounts ?? discounts })
+  }
+
   const handleDeleteConfirm = async () => {
     if (deleteConfirmText !== event.eventName || !deleteReason.trim()) return
     setSaving("delete")
@@ -433,7 +511,25 @@ export default function EventDataTab({ eventData, onUpdate, onDeleted, adminUser
           <Package className="w-3.5 h-3.5" />
           Addons
         </button>
+        {canEditEvent && (
+          <button
+            onClick={() => setActiveTab("editEvent")}
+            className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all flex items-center gap-1.5 ${
+              activeTab === "editEvent"
+                ? "bg-white text-[#6b2fa5] shadow-sm"
+                : "text-slate-500 hover:text-slate-700"
+            }`}
+          >
+            <Settings2 className="w-3.5 h-3.5" />
+            Edit Event
+          </button>
+        )}
       </div>
+
+      {/* Edit Event tab */}
+      {activeTab === "editEvent" && canEditEvent && (
+        <AdminEditPanel event={event} discounts={discounts} onUpdate={handleEditPanelUpdate} />
+      )}
 
       {/* Referrals tab */}
       {activeTab === "referrals" && (
@@ -452,7 +548,7 @@ export default function EventDataTab({ eventData, onUpdate, onDeleted, adminUser
 
       {/* Attendees tab */}
       {activeTab === "attendees" && (
-        <AdminAttendeesTab eventId={event.id} eventName={event.eventName} />
+        <AdminAttendeesTab eventId={event.id} eventName={event.eventName} ticketPrices={event.ticketPrices} />
       )}
 
       {/* Payouts tab */}
@@ -715,6 +811,53 @@ export default function EventDataTab({ eventData, onUpdate, onDeleted, adminUser
               className="shrink-0 px-3 py-1.5 text-xs font-semibold rounded-lg border border-purple-200 bg-purple-50 text-[#6b2fa5] hover:bg-purple-100 transition-colors disabled:opacity-50"
             >
               Edit Fees
+            </button>
+          </div>
+        </div>
+      </div>
+      )}
+
+      {/* ── PAYSTACK FEE BURDEN ── */}
+      {canModerate && (
+      <div className={`rounded-2xl border overflow-hidden ${currentPaystackPayer !== "attendee" ? "border-purple-200 bg-purple-50/30" : "border-slate-200 bg-white"}`}>
+        <div className="px-5 py-4 border-b border-slate-100 flex items-center gap-2.5">
+          <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${currentPaystackPayer !== "attendee" ? "bg-purple-100 border border-purple-200" : "bg-slate-100 border border-slate-200"}`}>
+            <Wallet className={`w-3.5 h-3.5 ${currentPaystackPayer !== "attendee" ? "text-[#6b2fa5]" : "text-slate-400"}`} />
+          </div>
+          <div>
+            <h3 className="font-semibold text-sm text-slate-800">Paystack Fee</h3>
+            <p className="text-xs text-slate-500">Who pays Paystack&apos;s own processing fee — separate from the platform fee above.</p>
+          </div>
+        </div>
+        <div className="p-5 space-y-3">
+          <div className="rounded-xl border border-slate-200 bg-white p-4 flex items-start justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <Settings2 className={`w-4 h-4 shrink-0 mt-0.5 ${currentPaystackPayer !== "attendee" ? "text-[#6b2fa5]" : "text-slate-400"}`} />
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <p className="text-sm font-semibold text-slate-800">
+                    {currentPaystackPayer === "attendee" && "Attendee also pays Paystack's fee"}
+                    {currentPaystackPayer === "organizer" && "Organizer absorbs Paystack's fee"}
+                    {currentPaystackPayer === "spotix" && "Spotix absorbs Paystack's fee"}
+                  </p>
+                  {currentPaystackPayer === "attendee" && <Badge color="slate">Platform Default</Badge>}
+                  {currentPaystackPayer === "organizer" && <Badge color="blue">Organizer Pays</Badge>}
+                  {currentPaystackPayer === "spotix" && <Badge color="blue">Spotix Pays</Badge>}
+                </div>
+                <p className="text-xs text-slate-500 mt-0.5 leading-relaxed max-w-md">
+                  {currentPaystackPayer === "attendee" && "Paystack's own processing fee (~1.5% + ₦100, capped at ₦2,000) is added on top of the ticket price and platform fee, same as the platform default."}
+                  {currentPaystackPayer === "organizer" && "Attendees only pay the platform fee above. Paystack's fee is deducted from this event's payout balance on every sale instead."}
+                  {currentPaystackPayer === "spotix" && "Attendees only pay the platform fee above. The organizer's payout is unaffected — Spotix absorbs the fee out of its own platform-fee margin instead."}
+                  {" "}Applies to every ticket purchased going forward; past purchases keep their original amount.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => { setPaystackPayerChoice(currentPaystackPayer); setFeeBurdenReason(""); setFeeBurdenModal(true) }}
+              disabled={saving === "feeBurden"}
+              className="shrink-0 px-3 py-1.5 text-xs font-semibold rounded-lg border border-purple-200 bg-purple-50 text-[#6b2fa5] hover:bg-purple-100 transition-colors disabled:opacity-50"
+            >
+              Change
             </button>
           </div>
         </div>
@@ -984,6 +1127,47 @@ export default function EventDataTab({ eventData, onUpdate, onDeleted, adminUser
           </button>
         )}
         <ReasonTextarea value={pricingReason} onChange={setPricingReason} placeholder="Reason for this fee change (required)…" />
+      </ActionModal>
+
+      <ActionModal
+        open={feeBurdenModal}
+        onClose={() => { setFeeBurdenModal(false); setFeeBurdenReason("") }}
+        title="Change who pays Paystack's fee"
+        description="Paystack's own processing fee (~1.5% + ₦100, capped at ₦2,000) is separate from the platform fee above. Choose who covers it for this event, going forward."
+        warning={
+          paystackPayerChoice === "organizer"
+            ? "This reduces the organizer's payout on every ticket sold for this event by Paystack's fee amount."
+            : paystackPayerChoice === "spotix"
+              ? "This does not touch the organizer's payout — Spotix absorbs the shortfall out of its own platform-fee margin instead."
+              : undefined
+        }
+        onConfirm={handleUpdateFeeBurdenConfirm}
+        confirmLabel="Save Change"
+        loading={saving === "feeBurden"}
+        confirmDisabled={!feeBurdenReason.trim() || paystackPayerChoice === currentPaystackPayer}
+      >
+        <div className="space-y-2 mb-3">
+          {([
+            { value: "attendee" as const, label: "Attendee pays", hint: "Platform default — added on top of the total." },
+            { value: "organizer" as const, label: "Organizer absorbs", hint: "Deducted from this event's payout balance." },
+            { value: "spotix" as const, label: "Spotix absorbs", hint: "Organizer's payout is unaffected." },
+          ]).map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => setPaystackPayerChoice(opt.value)}
+              className={`w-full text-left px-3 py-2.5 rounded-lg border text-sm transition-colors ${
+                paystackPayerChoice === opt.value
+                  ? "border-[#6b2fa5] bg-purple-50 text-[#6b2fa5]"
+                  : "border-slate-200 text-slate-600 hover:bg-slate-50"
+              }`}
+            >
+              <span className="font-semibold">{opt.label}</span>
+              <span className="block text-xs opacity-80 mt-0.5">{opt.hint}</span>
+            </button>
+          ))}
+        </div>
+        <ReasonTextarea value={feeBurdenReason} onChange={setFeeBurdenReason} placeholder="Reason for this change (required)…" />
       </ActionModal>
 
       <ActionModal
