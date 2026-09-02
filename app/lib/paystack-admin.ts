@@ -107,12 +107,14 @@ export async function listExternalTransfers(page: number, perPage = 20): Promise
 
 export async function initiateBackendTransfer(params: {
   reference: string
-  amount: number // already amount-after-fee
+  amount: number // already amount-after-fee for Transfers; the full disbursed amount for Disbursements/Payments
   reason: string
   bankCode: string
   accountNumber: string
   accountName: string
   recipientCode?: string | null
+  /** Optional — only ever passed by the Disbursements/Payments withdrawal flow, so the recipient's email travels with the Paystack recipient record. */
+  recipientEmail?: string
 }): Promise<{ recipientCode: string; transferCode: string; status: string }> {
   const data = await backendFetch("/v1/admin/initiate-transfer", {
     method: "POST",

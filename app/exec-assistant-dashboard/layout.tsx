@@ -19,6 +19,7 @@ export default async function Layout({ children }: { children: React.ReactNode }
         { label: "Event Data", href: "/exec-assistant-dashboard/event-data", iconName: "CalendarDays" },
         { label: "Verification", href: "/exec-assistant-dashboard/verification", iconName: "ShieldCheck" },
         { label: "Votes", href: "/exec-assistant-dashboard/votes", iconName: "Vote" },
+        { label: "Payments", href: "/exec-assistant-dashboard/payments", iconName: "Wallet" },
       ]}
     >
       {children}
