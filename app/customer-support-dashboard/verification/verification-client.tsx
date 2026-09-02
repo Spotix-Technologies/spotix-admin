@@ -3,8 +3,14 @@
 import { useState, useEffect } from "react"
 import {
   Loader2, AlertCircle, CheckCircle2, ShieldCheck, User, MapPin,
-  FileText, Camera, RefreshCw, Copy, Check, ExternalLink, Search, X,
+  FileText, Camera, RefreshCw, Copy, Check, ExternalLink, Search, X, XCircle,
 } from "lucide-react"
+
+interface DocumentRejection {
+  problem: string
+  suggestion: string
+  rejectedBy?: string
+}
 
 interface DocumentStatus {
   status: "pending" | "completed"
@@ -12,6 +18,7 @@ interface DocumentStatus {
   timeUploaded?: string
   fileUrl?: string
   provider?: string
+  rejection?: DocumentRejection | null
 }
 
 interface VerificationRequest {
@@ -34,7 +41,9 @@ interface VerificationRequest {
   } | null
 }
 
-const DOC_META: Record<string, { label: string; icon: React.ReactNode }> = {
+type DocKey = "nin" | "selfie" | "proofOfAddress"
+
+const DOC_META: Record<DocKey, { label: string; icon: React.ReactNode }> = {
   nin: { label: "National ID (NIN)", icon: <FileText className="w-4 h-4" /> },
   selfie: { label: "Selfie", icon: <Camera className="w-4 h-4" /> },
   proofOfAddress: { label: "Proof of Address", icon: <MapPin className="w-4 h-4" /> },
@@ -53,6 +62,13 @@ export function VerificationClient() {
   const [searchLoading, setSearchLoading] = useState(false)
   const [searchError, setSearchError] = useState<string | null>(null)
   const [searchResult, setSearchResult] = useState<VerificationRequest | null>(null)
+
+  // Reject-document modal state — shared by both the search result card and
+  // the pending-requests list, keyed by which verification+document is open.
+  const [rejectTarget, setRejectTarget] = useState<{ verificationId: string; document: DocKey; isSearchResult: boolean } | null>(null)
+  const [rejectProblem, setRejectProblem] = useState("")
+  const [rejectSuggestion, setRejectSuggestion] = useState("")
+  const [rejecting, setRejecting] = useState(false)
 
   const showToast = (msg: string, type: "success" | "error") => {
     setToast({ msg, type })
@@ -116,6 +132,43 @@ export function VerificationClient() {
     setTimeout(() => setCopiedBvt(null), 2000)
   }
 
+  const openReject = (verificationId: string, document: DocKey, isSearchResult: boolean) => {
+    setRejectTarget({ verificationId, document, isSearchResult })
+    setRejectProblem("")
+    setRejectSuggestion("")
+  }
+
+  const closeReject = () => {
+    if (rejecting) return
+    setRejectTarget(null)
+  }
+
+  const submitReject = async () => {
+    if (!rejectTarget || !rejectProblem.trim()) return
+    setRejecting(true)
+    try {
+      const res = await fetch(`/api/v1/verification/${rejectTarget.verificationId}/reject`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          document: rejectTarget.document,
+          problem: rejectProblem.trim(),
+          suggestion: rejectSuggestion.trim(),
+        }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error)
+      showToast(`${DOC_META[rejectTarget.document].label} rejected — booker notified`, "success")
+      if (rejectTarget.isSearchResult) await handleSearch()
+      else await load()
+      setRejectTarget(null)
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : "Failed to reject document", "error")
+    } finally {
+      setRejecting(false)
+    }
+  }
+
   return (
     <div className="max-w-3xl mx-auto p-4 md:p-6 pb-12 space-y-5">
       {toast && (
@@ -169,6 +222,7 @@ export function VerificationClient() {
             copiedBvt={copiedBvt}
             onVerify={(id) => handleVerify(id, true)}
             onCopyBvt={copyBvt}
+            onReject={(docKey) => openReject(searchResult.verificationId, docKey, true)}
           />
         )}
       </div>
@@ -208,21 +262,76 @@ export function VerificationClient() {
             copiedBvt={copiedBvt}
             onVerify={(id) => handleVerify(id, false)}
             onCopyBvt={copyBvt}
+            onReject={(docKey) => openReject(req.verificationId, docKey, false)}
           />
         ))}
       </div>
+
+      {/* Reject document modal */}
+      {rejectTarget && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={closeReject}>
+          <div className="max-w-sm w-full bg-white rounded-2xl border border-slate-200 shadow-2xl p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-red-50 flex items-center justify-center text-red-500">
+                <XCircle className="w-4 h-4" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-slate-800">Reject {DOC_META[rejectTarget.document].label}</p>
+                <p className="text-xs text-slate-400">The booker will be emailed this reason</p>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-slate-500 mb-1.5">What's wrong with it?</label>
+              <textarea
+                value={rejectProblem}
+                onChange={(e) => setRejectProblem(e.target.value)}
+                placeholder="e.g. The NIN slip image is blurry and the number isn't legible"
+                rows={3}
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-300"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-slate-500 mb-1.5">Suggestion (optional)</label>
+              <textarea
+                value={rejectSuggestion}
+                onChange={(e) => setRejectSuggestion(e.target.value)}
+                placeholder="e.g. Please re-upload in good lighting with all four corners visible"
+                rows={2}
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-300"
+              />
+            </div>
+
+            <div className="flex gap-2">
+              <button onClick={closeReject} disabled={rejecting} className="flex-1 py-2.5 rounded-lg border border-slate-200 text-slate-600 text-sm font-medium hover:bg-slate-50 disabled:opacity-50">
+                Cancel
+              </button>
+              <button
+                onClick={submitReject}
+                disabled={!rejectProblem.trim() || rejecting}
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg bg-red-600 text-white text-sm font-semibold hover:bg-red-700 disabled:opacity-50 transition-colors"
+              >
+                {rejecting ? <Loader2 className="w-4 h-4 animate-spin" /> : <XCircle className="w-4 h-4" />}
+                Reject &amp; notify
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
 
 function RequestCard({
-  req, verifying, copiedBvt, onVerify, onCopyBvt,
+  req, verifying, copiedBvt, onVerify, onCopyBvt, onReject,
 }: {
   req: VerificationRequest
   verifying: string | null
   copiedBvt: string | null
   onVerify: (verificationId: string) => void
   onCopyBvt: (bvt: string) => void
+  onReject: (document: DocKey) => void
 }) {
   return (
     <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 space-y-4">
@@ -252,19 +361,44 @@ function RequestCard({
         {(["nin", "selfie", "proofOfAddress"] as const).map((key) => {
           const doc = req[key]
           const meta = DOC_META[key]
+          const rejected = doc?.status !== "completed" && !!doc?.rejection
           return (
-            <div key={key} className={`rounded-lg border p-3 ${doc?.status === "completed" ? "border-emerald-200 bg-emerald-50/50" : "border-slate-200 bg-slate-50"}`}>
+            <div
+              key={key}
+              className={`rounded-lg border p-3 ${
+                doc?.status === "completed"
+                  ? "border-emerald-200 bg-emerald-50/50"
+                  : rejected
+                    ? "border-red-200 bg-red-50/50"
+                    : "border-slate-200 bg-slate-50"
+              }`}
+            >
               <div className="flex items-center gap-1.5 text-xs font-semibold text-gray-600 mb-1.5">
                 {meta.icon} {meta.label}
               </div>
               {doc?.status === "completed" ? (
-                doc.fileUrl ? (
-                  <a href={doc.fileUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-[#6b2fa5] flex items-center gap-1 hover:underline">
-                    View file <ExternalLink className="w-3 h-3" />
-                  </a>
-                ) : (
-                  <span className="text-xs text-emerald-600">Uploaded</span>
-                )
+                <div className="space-y-1.5">
+                  {doc.fileUrl ? (
+                    <a href={doc.fileUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-[#6b2fa5] flex items-center gap-1 hover:underline">
+                      View file <ExternalLink className="w-3 h-3" />
+                    </a>
+                  ) : (
+                    <span className="text-xs text-emerald-600">Uploaded</span>
+                  )}
+                  <button
+                    onClick={() => onReject(key)}
+                    className="text-xs text-red-500 flex items-center gap-1 hover:underline"
+                  >
+                    <XCircle className="w-3 h-3" /> Reject
+                  </button>
+                </div>
+              ) : rejected ? (
+                <div className="space-y-1">
+                  <p className="text-xs text-red-600 font-semibold flex items-center gap-1">
+                    <XCircle className="w-3 h-3" /> Rejected — awaiting re-upload
+                  </p>
+                  <p className="text-xs text-red-500/90">{doc?.rejection?.problem}</p>
+                </div>
               ) : (
                 <span className="text-xs text-gray-400">Not uploaded</span>
               )}

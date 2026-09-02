@@ -27,6 +27,30 @@ function generateBVT(): string {
   return `BVT-${code.slice(0, 5)}-${code.slice(5)}`
 }
 
+// Best-effort approval email: the BVT has already been issued and saved by
+// the time this is called, so a failure here (network hiccup, backend down)
+// must never surface as a failed verification to the admin who just did it —
+// same fire-and-forget philosophy as spotix-booker's team notification calls.
+async function notifyBookerVerificationApproved(params: { email: string; name: string; bvt: string }) {
+  try {
+    const BACKEND_URL = process.env.BACKEND_URL
+    if (!BACKEND_URL) {
+      console.warn("[verification/verify] BACKEND_URL is not configured — approval email not sent")
+      return
+    }
+    const res = await fetch(`${BACKEND_URL}/v1/notify/booker-verification-approved`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(params),
+    })
+    if (!res.ok) {
+      console.warn("[verification/verify] approval email failed:", await res.text().catch(() => ""))
+    }
+  } catch (err) {
+    console.error("[verification/verify] approval email error:", err)
+  }
+}
+
 export async function POST(request: NextRequest, { params }: { params: Promise<{ verificationId: string }> }) {
   const admin = await verifyAdminAccess(request, ["admin", "customer-support", "exec-assistant"])
   if ("error" in admin) return admin.error
@@ -52,9 +76,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
   if (!data.uid) return fail("This verification request is not linked to a user", 400)
 
+  const userRef = adminDb.collection("users").doc(data.uid)
+  const userSnap = await userRef.get()
+  const userData = userSnap.data()
+
   const bvt = generateBVT()
 
-  await adminDb.collection("users").doc(data.uid).update({
+  await userRef.update({
     bvt,
     isVerified: true,
     verifiedAt: FieldValue.serverTimestamp(),
@@ -68,6 +96,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     verifiedByUid: admin.uid,
     bvt,
   })
+
+  if (userData?.email) {
+    await notifyBookerVerificationApproved({
+      email: userData.email,
+      name: userData.fullName || userData.username || "there",
+      bvt,
+    })
+  }
 
   return ok({ message: "Booker verified successfully", bvt })
 }
