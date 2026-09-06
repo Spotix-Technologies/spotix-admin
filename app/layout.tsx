@@ -1,6 +1,5 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-// @ts-expect-error Next.js processes global CSS imports at build time.
 import "./globals.css";
 import { InstallPrompt } from "./components/pwa/install-prompt";
 import { RegisterServiceWorker } from "./components/pwa/register-sw";
