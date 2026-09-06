@@ -123,4 +123,31 @@
   body {
     @apply bg-background text-foreground;
   }
+
+  /* Default scroll bar color (Firefox) */
+  html {
+    scrollbar-color: #6b2fa5 transparent;
+    scrollbar-width: thin;
+  }
+
+  /* Default scroll bar color (WebKit/Blink browsers) */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background-color: #6b2fa5;
+    border-radius: 8px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: #5a2689;
+  }
 }

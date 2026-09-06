@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { signInWithEmailAndPassword } from "firebase/auth"
 import { auth } from "@/lib/firebase-client"
@@ -10,6 +10,7 @@ import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { useSplash } from "@/components/pwa/splash-context"
 
 // Maps Firebase Auth (and our own API) error codes to friendly, non-technical messages.
 function friendlyAuthError(err: unknown): string {
@@ -41,11 +42,16 @@ function friendlyAuthError(err: unknown): string {
 
 export default function LoginClient() {
   const router = useRouter()
+  const { showSplash, hideSplash } = useSplash()
   const [email, setEmail]       = useState("")
   const [password, setPassword] = useState("")
   const [error, setError]       = useState("")
   const [success, setSuccess]   = useState(false)
   const [loading, setLoading]   = useState(false)
+
+  // Release the splash's hold if the user navigates away from /login by any
+  // other means while it's showing (e.g. back button).
+  useEffect(() => () => hideSplash("login"), [hideSplash])
 
   const doLogin = async (idToken: string): Promise<{ ok: boolean; data: any }> => {
     const res = await fetch("/api/v1/login", {
@@ -86,6 +92,7 @@ export default function LoginClient() {
 
       // Success — let the user know we're taking them to their dashboard
       setSuccess(true)
+      showSplash("login", "We are setting everything up...")
 
       // Redirect based on role returned from server
       const dest: string = data.redirectTo || "/unauth"

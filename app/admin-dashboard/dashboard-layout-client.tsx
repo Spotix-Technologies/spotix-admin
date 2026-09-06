@@ -2,7 +2,7 @@
 "use client"
 
 import type React from "react"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter, usePathname } from "next/navigation"
 import Image from "next/image"
 import {
@@ -87,6 +87,18 @@ function SidebarInner({ user }: { user: User }) {
   const [loggingOut, setLoggingOut] = useState(false)
   const [switchingRole, setSwitchingRole] = useState(false)
   const [showSwitch, setShowSwitch] = useState(false)
+  const [navToast, setNavToast] = useState(false)
+
+  // Hide the "Loading..." toast once the route has actually changed.
+  useEffect(() => {
+    setNavToast(false)
+  }, [pathname])
+
+  const handleMenuItemClick = (item: (typeof menuItems)[number]) => {
+    if (!item.active) return
+    if (item.href !== pathname) setNavToast(true)
+    router.push(item.href)
+  }
 
   const switchableRoles = user.secondaryRoles.filter((r) => r !== "admin")
 
@@ -134,7 +146,14 @@ function SidebarInner({ user }: { user: User }) {
   })
 
   return (
-    <Sidebar className="border-r border-gray-200">
+    <>
+      {navToast && (
+        <div className="fixed top-4 right-4 z-[9999] flex items-center gap-3 px-5 py-3.5 rounded-xl shadow-lg border border-gray-200 bg-white text-sm font-medium text-gray-700">
+          <Loader2 className="w-4 h-4 animate-spin text-[#6b2fa5]" />
+          Loading...
+        </div>
+      )}
+      <Sidebar className="border-r border-gray-200">
       {/* ── Header ── */}
       <SidebarHeader className="p-3 md:p-4">
         <div className={`flex items-center gap-2 md:gap-3 ${collapsed ? "lg:justify-center" : ""}`}>
@@ -178,7 +197,7 @@ function SidebarInner({ user }: { user: User }) {
           {visibleMenuItems.map((item) => (
             <SidebarMenuItem key={item.id}>
               <SidebarMenuButton
-                onClick={() => item.active && router.push(item.href)}
+                onClick={() => handleMenuItemClick(item)}
                 isActive={isCurrentPage(item.href)}
                 tooltip={!item.active ? "Coming soon" : item.label}
                 className={`w-full justify-start text-sm ${!item.active ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
@@ -269,7 +288,8 @@ function SidebarInner({ user }: { user: User }) {
           )}
         </Button>
       </SidebarFooter>
-    </Sidebar>
+      </Sidebar>
+    </>
   )
 }
 

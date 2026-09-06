@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { Loader2 } from "lucide-react"
+import { useSplash } from "@/components/pwa/splash-context"
 import { YearStats } from "./year-stats"
 import { MonthStats } from "./month-stats"
 import { DayStats } from "./day-stats"
@@ -90,8 +91,14 @@ export function HomeStats() {
   const [stats, setStats] = useState<StatsData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const { showSplash, hideSplash } = useSplash()
 
   useEffect(() => {
+    // Keep the splash up until the dashboard's own data has arrived, and
+    // release it no matter how this component leaves (success, error, or
+    // the user navigating away mid-fetch).
+    showSplash("admin-home-stats")
+
     async function fetchStats() {
       try {
         const response = await fetch("/api/v1/home-stats")
@@ -109,8 +116,9 @@ export function HomeStats() {
       }
     }
 
-    fetchStats()
-  }, [])
+    fetchStats().finally(() => hideSplash("admin-home-stats"))
+    return () => hideSplash("admin-home-stats")
+  }, [showSplash, hideSplash])
 
   if (loading) {
     return (

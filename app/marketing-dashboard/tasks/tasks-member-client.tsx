@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { ClipboardList, Loader2, Calendar, Globe, Users, Clock, CheckCircle2, Circle } from "lucide-react"
+import { useSplash } from "@/components/pwa/splash-context"
 
 type TaskStatus = "open" | "in-progress" | "completed"
 
@@ -45,10 +46,14 @@ export function TasksMemberClient({
   const [tasks, setTasks] = useState<Task[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const { showSplash, hideSplash } = useSplash()
 
   const fetchTasks = useCallback(async () => {
     setLoading(true)
     setError(null)
+    // Keep the splash up until tasks have arrived - this page is the
+    // landing/home page for this dashboard role.
+    showSplash("tasks-home")
     try {
       const res = await fetch("/api/v1/tasks")
       const data = await res.json()
@@ -58,10 +63,14 @@ export function TasksMemberClient({
       setError(e.message)
     } finally {
       setLoading(false)
+      hideSplash("tasks-home")
     }
-  }, [])
+  }, [showSplash, hideSplash])
 
-  useEffect(() => { fetchTasks() }, [fetchTasks])
+  useEffect(() => {
+    fetchTasks()
+    return () => hideSplash("tasks-home")
+  }, [fetchTasks, hideSplash])
 
   return (
     <div className="space-y-5">
