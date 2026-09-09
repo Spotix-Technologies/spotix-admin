@@ -6,7 +6,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase-admin"
 import { verifyAdminAccess } from "@/lib/verify-admin"
-import { LEGAL_POLICY_TABS, LEGAL_EDITOR_ROLES } from "@/lib/legal-policies"
+import { LEGAL_EDITOR_ROLES } from "@/lib/legal-policies"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -32,8 +32,14 @@ export async function GET(request: NextRequest) {
     const { data, error } = await query
     if (error) throw error
 
+    const { data: policyTypes, error: typesError } = await supabaseAdmin
+      .from("legal_policy_types")
+      .select("*")
+      .order("sort_order", { ascending: true })
+    if (typesError) throw typesError
+
     return NextResponse.json(
-      { success: true, versions: data ?? [], policyTabs: LEGAL_POLICY_TABS, developer: DEV_TAG },
+      { success: true, versions: data ?? [], policyTabs: policyTypes ?? [], developer: DEV_TAG },
       { status: 200 },
     )
   } catch (error) {
@@ -65,8 +71,14 @@ export async function POST(request: NextRequest) {
         { status: 400 },
       )
     }
-    if (!LEGAL_POLICY_TABS.some((t) => t.slug === slug)) {
-      return NextResponse.json({ error: "Unknown policy slug", developer: DEV_TAG }, { status: 400 })
+    const { data: policyType, error: typeError } = await supabaseAdmin
+      .from("legal_policy_types")
+      .select("slug")
+      .eq("slug", slug)
+      .maybeSingle()
+    if (typeError) throw typeError
+    if (!policyType) {
+      return NextResponse.json({ error: "Unknown document type", developer: DEV_TAG }, { status: 400 })
     }
 
     const { data, error } = await supabaseAdmin

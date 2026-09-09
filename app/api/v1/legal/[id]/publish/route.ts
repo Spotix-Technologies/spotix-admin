@@ -23,7 +23,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     const { data: target, error: fetchError } = await supabaseAdmin
       .from("legal_policy_versions")
-      .select("id, slug")
+      .select("id, slug, published_at")
       .eq("id", id)
       .single()
 
@@ -41,7 +41,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     const { data, error } = await supabaseAdmin
       .from("legal_policy_versions")
-      .update({ is_published: true })
+      .update({ is_published: true, published_at: target.published_at ?? new Date().toISOString() })
       .eq("id", id)
       .select()
       .single()
