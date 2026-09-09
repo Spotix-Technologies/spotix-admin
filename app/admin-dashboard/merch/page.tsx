@@ -1,7 +1,12 @@
-import { UnderDevelopment } from "../components/under-development"
-import { requireFullAdmin } from "@/lib/require-admin-page"
+import type { Metadata } from "next"
+import { MerchAdminClient } from "./merch-admin-client"
+import { requireRoles } from "@/lib/require-admin-page"
+
+export const metadata: Metadata = {
+  title: "Merch | Spotix Admin Portal",
+}
 
 export default async function MerchPage() {
-  await requireFullAdmin()
-  return <UnderDevelopment pageName="Merch" />
+  await requireRoles(["admin", "customer-support"])
+  return <MerchAdminClient />
 }

@@ -4,7 +4,15 @@ const nextConfig = {
   images: {
     remotePatterns: [
       { protocol: 'https', hostname: 'utfs.io' },
-      { protocol: 'https', hostname: '*.ufs.sh' }
+      { protocol: 'https', hostname: '*.ufs.sh' },
+      { protocol: 'https', hostname: 'res.cloudinary.com', pathname: '/**' },
+      { protocol: 'https', hostname: 'firebasestorage.googleapis.com', pathname: '/**' },
+      { protocol: 'https', hostname: 'lh3.googleusercontent.com', pathname: '/**' },
+      { protocol: 'https', hostname: 'blogger.googleusercontent.com', pathname: '/**' },
+      { protocol: 'https', hostname: 'i.postimg.cc', pathname: '/**' },
+      // Wildcarded so it covers the project's Supabase host
+      // (qiubwizomwntgosyfrrn.supabase.co) and any future project.
+      { protocol: 'https', hostname: '*.supabase.co', pathname: '/**' },
     ],
     // Avatars are now generated and served by our own /api/avatar route as
     // SVG — next/image blocks SVG optimization by default, so this needs to

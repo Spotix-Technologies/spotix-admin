@@ -9,7 +9,7 @@ import {
   Home, Receipt, CalendarDays, FileText, Vote,
   ShoppingBag, Wallet, Users, UserPlus, Download,
   Settings, LogOut, Loader2, ClipboardList,
-  SwitchCamera, FolderOpen, Globe, ShieldCheck, UserCheck, Landmark, Send,
+  SwitchCamera, FolderOpen, Globe, ShieldCheck, UserCheck, Landmark, Send, Scale,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -55,6 +55,7 @@ const menuItems = [
   { id: "export",     label: "Export",     icon: Download,      href: "/admin-dashboard/export",     active: false, roles: ["admin"] },
   { id: "globals",    label: "Globals",    icon: Settings,      href: "/admin-dashboard/globals",    active: true,  roles: ["admin"] },
   { id: "documents",  label: "Documents",  icon: FolderOpen,    href: "/admin-dashboard/documents",  active: true  },
+  { id: "legal",      label: "Legal Content", icon: Scale,      href: "/admin-dashboard/legal",      active: true,  roles: ["admin", "exec-assistant"] },
 ] as const
 
 const ROLE_DASHBOARD: Record<string, string> = {
