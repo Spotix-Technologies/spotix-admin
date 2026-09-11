@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react"
 import {
   UserPlus, Trash2, Shield, ShieldCheck, Loader2,
-  X, Search, ChevronDown, Check,
+  X, Search, ChevronDown, Check, Pencil,
 } from "lucide-react"
 import Image from "next/image"
 
@@ -54,7 +54,7 @@ function RoleBadge({ role }: { role: AdminRole }) {
   )
 }
 
-export function OnboardClient() {
+export function OnboardClient({ currentUid }: { currentUid: string }) {
   const [admins, setAdmins] = useState<AdminMember[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -69,6 +69,13 @@ export function OnboardClient() {
   const [selectedSecondary, setSelectedSecondary] = useState<AdminRole[]>([])
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
+
+  // Edit role modal state
+  const [editingAdmin, setEditingAdmin] = useState<AdminMember | null>(null)
+  const [editRole, setEditRole] = useState<AdminRole>("admin")
+  const [editSecondary, setEditSecondary] = useState<AdminRole[]>([])
+  const [editSubmitting, setEditSubmitting] = useState(false)
+  const [editError, setEditError] = useState<string | null>(null)
 
   // Remove confirm
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null)
@@ -152,6 +159,45 @@ export function OnboardClient() {
       alert(e.message)
     } finally {
       setRemoving(false)
+    }
+  }
+
+  const openEdit = (admin: AdminMember) => {
+    setEditingAdmin(admin)
+    setEditRole(admin.role)
+    setEditSecondary(admin.secondaryRoles)
+    setEditError(null)
+  }
+
+  const toggleEditSecondary = (role: AdminRole) => {
+    if (role === editRole) return
+    setEditSecondary((prev) =>
+      prev.includes(role) ? prev.filter((r) => r !== role) : [...prev, role]
+    )
+  }
+
+  const handleEditSubmit = async () => {
+    if (!editingAdmin) return
+    setEditSubmitting(true)
+    setEditError(null)
+    try {
+      const res = await fetch("/api/v1/onboard", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          uid:            editingAdmin.uid,
+          role:           editRole,
+          secondaryRoles: editSecondary,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || "Failed to update role")
+      setEditingAdmin(null)
+      await fetchAdmins()
+    } catch (e: any) {
+      setEditError(e.message)
+    } finally {
+      setEditSubmitting(false)
     }
   }
 
@@ -240,16 +286,27 @@ export function OnboardClient() {
                 </div>
               </div>
 
-              {/* Remove */}
-              {!admin.isSuperAdmin && (
-                <button
-                  onClick={() => setConfirmRemove(admin.uid)}
-                  className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors flex-shrink-0"
-                  title="Remove admin"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              )}
+              {/* Edit / Remove */}
+              <div className="flex items-center gap-1 flex-shrink-0">
+                {!admin.isSuperAdmin && admin.uid !== currentUid && (
+                  <button
+                    onClick={() => openEdit(admin)}
+                    className="p-2 text-gray-400 hover:text-[#6b2fa5] hover:bg-[#6b2fa5]/10 rounded-lg transition-colors"
+                    title="Edit roles"
+                  >
+                    <Pencil className="w-4 h-4" />
+                  </button>
+                )}
+                {!admin.isSuperAdmin && (
+                  <button
+                    onClick={() => setConfirmRemove(admin.uid)}
+                    className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                    title="Remove admin"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
             </div>
           ))}
         </div>
@@ -340,6 +397,78 @@ export function OnboardClient() {
               >
                 {submitting ? <><Loader2 className="w-4 h-4 animate-spin" /> Onboarding...</> : "Onboard Admin"}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit roles Modal */}
+      {editingAdmin && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+              <div>
+                <h2 className="font-semibold text-gray-900">Edit Roles</h2>
+                <p className="text-xs text-gray-500 mt-0.5">{editingAdmin.username || editingAdmin.fullName || editingAdmin.email}</p>
+              </div>
+              <button onClick={() => setEditingAdmin(null)} className="text-gray-400 hover:text-gray-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-5">
+              {/* Primary role */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">Primary Role</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {ALL_ROLES.map((role) => (
+                    <button
+                      key={role}
+                      onClick={() => { setEditRole(role); setEditSecondary((p) => p.filter((r) => r !== role)) }}
+                      className={`px-3 py-2 rounded-lg text-sm font-medium border transition-colors text-left ${editRole === role ? "border-[#6b2fa5] bg-[#6b2fa5]/10 text-[#6b2fa5]" : "border-gray-200 text-gray-600 hover:border-gray-300"}`}
+                    >
+                      {ROLE_LABELS[role]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Secondary roles */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">Secondary Roles <span className="font-normal text-gray-400">(optional)</span></label>
+                <div className="grid grid-cols-2 gap-2">
+                  {ALL_ROLES.filter((r) => r !== editRole).map((role) => (
+                    <button
+                      key={role}
+                      onClick={() => toggleEditSecondary(role)}
+                      className={`px-3 py-2 rounded-lg text-sm font-medium border transition-colors text-left flex items-center gap-2 ${editSecondary.includes(role) ? "border-[#6b2fa5] bg-[#6b2fa5]/5 text-[#6b2fa5]" : "border-gray-200 text-gray-600 hover:border-gray-300"}`}
+                    >
+                      <div className={`w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 ${editSecondary.includes(role) ? "bg-[#6b2fa5] border-[#6b2fa5]" : "border-gray-300"}`}>
+                        {editSecondary.includes(role) && <Check className="w-2.5 h-2.5 text-white" />}
+                      </div>
+                      {ROLE_LABELS[role]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {editError && <p className="text-xs text-red-500 bg-red-50 px-3 py-2 rounded-lg border border-red-200">{editError}</p>}
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setEditingAdmin(null)}
+                  className="flex-1 py-2.5 border border-gray-200 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleEditSubmit}
+                  disabled={editSubmitting}
+                  className="flex-1 py-2.5 bg-[#6b2fa5] text-white rounded-lg font-medium text-sm hover:bg-[#5a2690] disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
+                >
+                  {editSubmitting ? <><Loader2 className="w-4 h-4 animate-spin" /> Saving...</> : "Save changes"}
+                </button>
+              </div>
             </div>
           </div>
         </div>

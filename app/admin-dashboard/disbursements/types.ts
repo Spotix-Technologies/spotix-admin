@@ -24,6 +24,9 @@ export interface DisbursementRow {
   required_approver_uids: string[]
   approved_uids: string[]
   status: "pending_approval" | "approved" | "rejected"
+  rejection_reason: string | null
+  rejected_by_uid: string | null
+  rejected_by_name: string | null
   payout_references: string[]
   created_at: string
   approved_at: string | null

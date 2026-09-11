@@ -29,6 +29,9 @@ export function TransferListPanel({ transfers, loadingList, listError, page, tot
               <div className="min-w-0">
                 <p className="text-sm font-semibold text-slate-800 truncate">{t.account_name} · {t.bank_name}</p>
                 <p className="text-xs text-slate-400">{t.reference} · {t.reason} · {new Date(t.created_at).toLocaleString()}</p>
+                {t.status === "rejected" && t.rejection_reason && (
+                  <p className="text-xs text-red-500 mt-0.5">Rejected by {t.rejected_by_name ?? "an admin"}: {t.rejection_reason}</p>
+                )}
               </div>
               <div className="flex items-center gap-3 shrink-0">
                 <div className="text-right">

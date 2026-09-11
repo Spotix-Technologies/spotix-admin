@@ -10,6 +10,7 @@ import {
   ShoppingBag, Wallet, Users, UserPlus, Download,
   Settings, LogOut, Loader2, ClipboardList,
   SwitchCamera, FolderOpen, Globe, ShieldCheck, UserCheck, Landmark, Send, Scale,
+  ImageUp, HandCoins,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -47,7 +48,7 @@ const menuItems = [
   { id: "tasks",      label: "Tasks",      icon: ClipboardList, href: "/admin-dashboard/tasks",      active: true,  roles: ["admin"] },
   { id: "reports",    label: "Reports",    icon: FileText,      href: "/admin-dashboard/reports",    active: false, roles: ["admin"] },
   { id: "votes",      label: "Votes",      icon: Vote,          href: "/admin-dashboard/votes",      active: true  },
-  { id: "merch",      label: "Merch",      icon: ShoppingBag,   href: "/admin-dashboard/merch",      active: false, roles: ["admin"] },
+  { id: "merch",      label: "Merch",      icon: ShoppingBag,   href: "/admin-dashboard/merch",      active: true, roles: ["admin"] },
   { id: "payouts",    label: "Payouts",    icon: Wallet,        href: "/admin-dashboard/payouts",    active: false, roles: ["admin"] },
   { id: "transfers",  label: "Transfers",  icon: Landmark,      href: "/admin-dashboard/transfers",  active: true,  roles: ["admin"] },
   { id: "disbursements", label: "Disbursements", icon: Send,    href: "/admin-dashboard/disbursements", active: true, roles: ["admin"] },
@@ -55,6 +56,8 @@ const menuItems = [
   { id: "export",     label: "Export",     icon: Download,      href: "/admin-dashboard/export",     active: false, roles: ["admin"] },
   { id: "globals",    label: "Globals",    icon: Settings,      href: "/admin-dashboard/globals",    active: true,  roles: ["admin"] },
   { id: "documents",  label: "Documents",  icon: FolderOpen,    href: "/admin-dashboard/documents",  active: true  },
+  { id: "requisition", label: "Requisition", icon: HandCoins,   href: "/admin-dashboard/requisition", active: true  },
+  { id: "storage",    label: "Storage",    icon: ImageUp,       href: "/admin-dashboard/storage",    active: true  },
   { id: "legal",      label: "Legal Content", icon: Scale,      href: "/admin-dashboard/legal",      active: true,  roles: ["admin", "exec-assistant"] },
 ] as const
 

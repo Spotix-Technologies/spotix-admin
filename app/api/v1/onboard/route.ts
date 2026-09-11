@@ -111,6 +111,67 @@ export async function POST(request: NextRequest) {
   }
 }
 
+/**
+ * PATCH /api/v1/onboard — edit an existing admin's primary role and/or
+ * secondary roles. Lets a full admin correct someone's access without
+ * having to remove and re-onboard them (see onboard-client.tsx's Edit
+ * modal).
+ *
+ * A super admin's role can't be changed here (same as DELETE refusing
+ * to remove them), and a full admin can't edit their own role — both
+ * guard against a full admin accidentally locking themselves, or the
+ * last super admin, out of the Onboard page.
+ */
+export async function PATCH(request: NextRequest) {
+  const auth = await verifyFullAdmin(request)
+  if ("error" in auth) return auth.error
+
+  try {
+    const body = await request.json()
+    const { uid, role, secondaryRoles = [] } = body
+
+    if (!uid) return NextResponse.json({ error: "uid required" }, { status: 400 })
+    if (!role || !VALID_ROLES.includes(role)) {
+      return NextResponse.json({ error: "Invalid role" }, { status: 400 })
+    }
+    for (const r of secondaryRoles) {
+      if (!VALID_ROLES.includes(r)) {
+        return NextResponse.json({ error: `Invalid secondary role: ${r}` }, { status: 400 })
+      }
+    }
+    if (secondaryRoles.includes(role)) {
+      return NextResponse.json({ error: "Secondary roles cannot include the primary role" }, { status: 400 })
+    }
+
+    const adminDoc = await adminDb.collection("admins").doc(uid).get()
+    if (!adminDoc.exists) {
+      return NextResponse.json({ error: "Admin not found" }, { status: 404 })
+    }
+
+    // Super admins' roles cannot be changed
+    if (adminDoc.data()?.setup === true) {
+      return NextResponse.json({ error: "Super admin's role cannot be changed" }, { status: 403 })
+    }
+
+    // Cannot edit your own role
+    if (uid === auth.uid) {
+      return NextResponse.json({ error: "Cannot edit your own role" }, { status: 403 })
+    }
+
+    await adminDb.collection("admins").doc(uid).update({
+      role,
+      secondaryRoles,
+      roleUpdatedAt: new Date(),
+      roleUpdatedBy: auth.uid,
+    })
+
+    return NextResponse.json({ success: true, admin: { uid, role, secondaryRoles } })
+  } catch (err) {
+    console.error("[onboard PATCH]", err)
+    return NextResponse.json({ error: "Failed to update admin" }, { status: 500 })
+  }
+}
+
 export async function DELETE(request: NextRequest) {
   const auth = await verifyFullAdmin(request)
   if ("error" in auth) return auth.error

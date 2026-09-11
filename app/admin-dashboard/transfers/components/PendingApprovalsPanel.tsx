@@ -1,17 +1,21 @@
 import { useState } from "react"
-import { AlertCircle, CheckCircle, Clock, KeySquare, Loader2 } from "lucide-react"
+import { AlertCircle, CheckCircle, Clock, KeySquare, Loader2, XCircle } from "lucide-react"
 import type { TransferRow } from "../types"
+import { RejectReasonModal } from "@/components/shared/RejectReasonModal"
 
 interface Props {
   pending: TransferRow[]
   pendingError: string | null
   approving: string | null
+  rejecting: string | null
   onApprove: (transferId: string, ottaKey?: string) => void
+  onReject: (transferId: string, reason: string) => Promise<boolean>
 }
 
-export function PendingApprovalsPanel({ pending, pendingError, approving, onApprove }: Props) {
+export function PendingApprovalsPanel({ pending, pendingError, approving, rejecting, onApprove, onReject }: Props) {
   const [approveOttaFor, setApproveOttaFor] = useState<string | null>(null)
   const [approveOttaKey, setApproveOttaKey] = useState("")
+  const [rejectingId, setRejectingId] = useState<string | null>(null)
 
   return (
     <>
@@ -55,10 +59,10 @@ export function PendingApprovalsPanel({ pending, pendingError, approving, onAppr
                     <button onClick={() => setApproveOttaFor(null)} className="text-xs text-slate-400 hover:text-slate-600 px-2">Cancel</button>
                   </div>
                 ) : (
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <button
                       onClick={() => onApprove(t.id)}
-                      disabled={approving === t.id}
+                      disabled={approving === t.id || rejecting === t.id}
                       className="inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 px-3 py-1.5 rounded-lg disabled:opacity-50"
                     >
                       {approving === t.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle className="w-3 h-3" />}
@@ -66,9 +70,18 @@ export function PendingApprovalsPanel({ pending, pendingError, approving, onAppr
                     </button>
                     <button
                       onClick={() => setApproveOttaFor(t.id)}
+                      disabled={approving === t.id || rejecting === t.id}
                       className="inline-flex items-center gap-1.5 text-xs font-semibold text-violet-600 hover:bg-violet-50 px-3 py-1.5 rounded-lg"
                     >
                       <KeySquare className="w-3 h-3" /> Approve with OTTA key
+                    </button>
+                    <button
+                      onClick={() => setRejectingId(t.id)}
+                      disabled={approving === t.id || rejecting === t.id}
+                      className="inline-flex items-center gap-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 px-3 py-1.5 rounded-lg disabled:opacity-50"
+                    >
+                      {rejecting === t.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <XCircle className="w-3 h-3" />}
+                      Reject
                     </button>
                   </div>
                 )}
@@ -76,6 +89,18 @@ export function PendingApprovalsPanel({ pending, pendingError, approving, onAppr
             ))}
           </div>
         </div>
+      )}
+
+      {rejectingId && (
+        <RejectReasonModal
+          title="Reject transfer"
+          submitting={rejecting === rejectingId}
+          onClose={() => setRejectingId(null)}
+          onSubmit={async (reason) => {
+            const success = await onReject(rejectingId, reason)
+            if (success) setRejectingId(null)
+          }}
+        />
       )}
     </>
   )

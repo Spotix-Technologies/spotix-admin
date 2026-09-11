@@ -20,6 +20,8 @@ export default async function Layout({ children }: { children: React.ReactNode }
         { label: "Agent Verification", href: "/customer-support-dashboard/agent-verification", iconName: "UserCheck" },
         { label: "Votes", href: "/customer-support-dashboard/votes", iconName: "Vote" },
         { label: "Merch", href: "/customer-support-dashboard/merch", iconName: "ShoppingBag" },
+        { label: "Requisition", href: "/customer-support-dashboard/requisition", iconName: "HandCoins" },
+        { label: "Storage", href: "/customer-support-dashboard/storage", iconName: "ImageUp" },
         { label: "Payments", href: "/customer-support-dashboard/payments", iconName: "Wallet" },
       ]}
     >

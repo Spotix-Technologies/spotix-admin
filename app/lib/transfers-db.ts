@@ -26,6 +26,9 @@ export interface TransferRow {
   amount_after_fee: number
   status: "pending_approval" | "approved" | "processing" | "successful" | "failed" | "rejected"
   failure_reason: string | null
+  rejection_reason: string | null
+  rejected_by_uid: string | null
+  rejected_by_name: string | null
   required_approver_uids: string[]
   approved_uids: string[]
   transfer_code: string | null
@@ -56,7 +59,7 @@ export function generateTransferReference(): string {
   return `SPTX-XFER-${Date.now()}-${randomLetters(2)}`
 }
 
-export async function createTransfer(row: Omit<TransferRow, "id" | "created_at" | "updated_at" | "approved_at" | "resolved_at" | "status" | "failure_reason" | "transfer_code" | "paystack_reference">): Promise<TransferRow> {
+export async function createTransfer(row: Omit<TransferRow, "id" | "created_at" | "updated_at" | "approved_at" | "resolved_at" | "status" | "failure_reason" | "transfer_code" | "paystack_reference" | "rejection_reason" | "rejected_by_uid" | "rejected_by_name">): Promise<TransferRow> {
   const { data, error } = await supabaseAdmin
     .from("admin_transfers")
     .insert({ ...row, status: "pending_approval" })
@@ -138,4 +141,20 @@ export async function updateTransferStatus(id: string, patch: Partial<TransferRo
     .single()
   if (error) throw new Error(error.message)
   return data as TransferRow
+}
+
+/**
+ * Rejects a transfer that's still pending approval. Unlike approval
+ * (which needs every required approver), a single required approver's
+ * rejection is enough to stop the transfer — see
+ * app/api/v1/admin/transfer/reject/route.ts.
+ */
+export async function rejectTransfer(id: string, reason: string, by: { uid: string; name: string }): Promise<TransferRow> {
+  return updateTransferStatus(id, {
+    status: "rejected",
+    rejection_reason: reason,
+    rejected_by_uid: by.uid,
+    rejected_by_name: by.name,
+    resolved_at: new Date().toISOString(),
+  })
 }

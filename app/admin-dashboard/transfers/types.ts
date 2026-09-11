@@ -13,6 +13,9 @@ export interface TransferRow {
   amount_after_fee: number
   status: "pending_approval" | "approved" | "processing" | "successful" | "failed" | "rejected"
   failure_reason: string | null
+  rejection_reason: string | null
+  rejected_by_uid: string | null
+  rejected_by_name: string | null
   required_approver_uids: string[]
   approved_uids: string[]
   created_at: string

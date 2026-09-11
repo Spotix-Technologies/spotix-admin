@@ -95,6 +95,9 @@ export function DisbursementListPanel({ disbursements, loading, error, page, tot
                       {d.type === "department" ? `${DEPT_LABEL[d.department ?? ""] ?? d.department} department` : `${d.recipient_uids.length} recipient${d.recipient_uids.length > 1 ? "s" : ""}`}
                       {" · "}{d.reference} · {new Date(d.created_at).toLocaleDateString()}
                     </p>
+                    {d.status === "rejected" && d.rejection_reason && (
+                      <p className="text-xs text-red-500 mt-0.5">Rejected by {d.rejected_by_name ?? "an admin"}: {d.rejection_reason}</p>
+                    )}
                   </div>
                   <div className="flex items-center gap-2.5 shrink-0">
                     <p className="text-sm font-bold text-slate-800">₦{d.amount.toLocaleString()}</p>

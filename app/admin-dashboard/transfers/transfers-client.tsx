@@ -31,7 +31,7 @@ export function TransfersClient() {
     loadBalance(); loadList(page); loadExternal(externalPage); loadPending(); loadOttaKeys()
   }
 
-  const { pending, pendingError, approving, loadPending, approve } = usePendingApprovals(refreshAll)
+  const { pending, pendingError, approving, rejecting, loadPending, approve, reject } = usePendingApprovals(refreshAll)
   const createForm = useCreateTransfer(refreshAll)
 
   useEffect(() => { loadBalance(); loadPending(); loadOttaKeys() }, [loadBalance, loadPending, loadOttaKeys])
@@ -71,7 +71,9 @@ export function TransfersClient() {
         pending={pending}
         pendingError={pendingError}
         approving={approving}
+        rejecting={rejecting}
         onApprove={approve}
+        onReject={reject}
       />
 
       <OttaKeysPanel

@@ -14,6 +14,8 @@ export default async function Layout({ children }: { children: React.ReactNode }
       basePath="/it-dashboard"
       extraNavItems={[
         { label: "Upload Events", href: "/it-dashboard/upload-events", iconName: "Globe" },
+        { label: "Requisition", href: "/it-dashboard/requisition", iconName: "HandCoins" },
+        { label: "Storage", href: "/it-dashboard/storage", iconName: "ImageUp" },
         { label: "Payments", href: "/it-dashboard/payments", iconName: "Wallet" },
       ]}
     >

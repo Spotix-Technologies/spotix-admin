@@ -5,6 +5,7 @@ export function usePendingDisbursementApprovals(onApproved: () => void) {
   const [pending, setPending] = useState<DisbursementRow[]>([])
   const [loadingPending, setLoadingPending] = useState(true)
   const [approving, setApproving] = useState<string | null>(null)
+  const [rejecting, setRejecting] = useState<string | null>(null)
   const [approveError, setApproveError] = useState<string | null>(null)
 
   const loadPending = useCallback(async () => {
@@ -38,5 +39,27 @@ export function usePendingDisbursementApprovals(onApproved: () => void) {
     }
   }, [loadPending, onApproved])
 
-  return { pending, loadingPending, loadPending, approving, approveError, approve }
+  const reject = useCallback(async (disbursementId: string, reason: string) => {
+    setRejecting(disbursementId)
+    setApproveError(null)
+    try {
+      const res = await fetch("/api/v1/admin/disbursements/reject", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ disbursementId, reason }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || "Failed to reject")
+      await loadPending()
+      onApproved()
+      return true
+    } catch (e: any) {
+      setApproveError(e.message || "Failed to reject")
+      return false
+    } finally {
+      setRejecting(null)
+    }
+  }, [loadPending, onApproved])
+
+  return { pending, loadingPending, loadPending, approving, rejecting, approveError, approve, reject }
 }

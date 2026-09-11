@@ -28,6 +28,9 @@ export interface DisbursementRow {
   required_approver_uids: string[]
   approved_uids: string[]
   status: "pending_approval" | "approved" | "rejected"
+  rejection_reason: string | null
+  rejected_by_uid: string | null
+  rejected_by_name: string | null
   payout_references: string[]
   created_at: string
   approved_at: string | null
@@ -84,7 +87,7 @@ function getWATDateString(): string {
   return formatter.format(new Date())
 }
 
-export async function createDisbursement(row: Omit<DisbursementRow, "id" | "created_at" | "updated_at" | "approved_at" | "status" | "payout_references">): Promise<DisbursementRow> {
+export async function createDisbursement(row: Omit<DisbursementRow, "id" | "created_at" | "updated_at" | "approved_at" | "status" | "payout_references" | "rejection_reason" | "rejected_by_uid" | "rejected_by_name">): Promise<DisbursementRow> {
   const { data, error } = await supabaseAdmin
     .from("disbursements")
     .insert({ ...row, status: "pending_approval" })
@@ -137,6 +140,21 @@ export async function updateDisbursementStatus(id: string, patch: Partial<Disbur
     .single()
   if (error) throw new Error(error.message)
   return data as DisbursementRow
+}
+
+/**
+ * Rejects a disbursement that's still pending approval. Unlike approval
+ * (which needs every required approver), a single required approver's
+ * rejection is enough to stop it — see
+ * app/api/v1/admin/disbursements/reject/route.ts.
+ */
+export async function rejectDisbursement(id: string, reason: string, by: { uid: string; name: string }): Promise<DisbursementRow> {
+  return updateDisbursementStatus(id, {
+    status: "rejected",
+    rejection_reason: reason,
+    rejected_by_uid: by.uid,
+    rejected_by_name: by.name,
+  })
 }
 
 /**
