@@ -73,6 +73,20 @@ export async function listAllMerchListings(
   return { listings: (data ?? []).map(mapListingRow), total: count ?? 0 }
 }
 
+/** All listings created by one booker — used by the Users admin page's
+ *  "Created Content" tab (Merch sub-tab) to show what a specific user
+ *  has listed, keyed by their uid (booker_id). Newest first. */
+export async function listMerchListingsByBooker(bookerId: string): Promise<MerchListing[]> {
+  const { data, error } = await supabaseAdmin
+    .from("merch_listings")
+    .select(LISTING_COLUMNS)
+    .eq("booker_id", bookerId)
+    .order("created_at", { ascending: false })
+
+  if (error) throw error
+  return (data ?? []).map(mapListingRow)
+}
+
 /** Not booker-scoped — admin/customer-support can look up any listing. */
 export async function getMerchListingById(listingId: string): Promise<MerchListing | null> {
   const { data, error } = await supabaseAdmin

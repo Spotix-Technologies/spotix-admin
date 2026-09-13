@@ -1,6 +1,7 @@
 "use client"
 
-import { useState, useEffect, useRef, useCallback } from "react"
+import { useState, useEffect, useRef, useCallback, Suspense } from "react"
+import { useSearchParams } from "next/navigation"
 import { Search, X, Trash2, RotateCcw, ShieldAlert, CalendarDays, ChevronRight, RefreshCw } from "lucide-react"
 import EventDataTab from "./event-data-tab"
 import ReviewDeletedEvents from "./review-deleted-events"
@@ -86,8 +87,9 @@ const STATUS_PILL: Record<string, string> = {
   completed: "bg-blue-100 text-blue-700 border-blue-200",
 }
 
-export function EventDataClient() {
+function EventDataClientInner() {
   const { session, loading: sessionLoading } = useAdminSession()
+  const searchParams = useSearchParams()
   const [viewState, setViewState] = useState<ViewState>("list")
 
   // List state
@@ -166,11 +168,19 @@ export function EventDataClient() {
     setShowDropdown(false)
     setQuery("")
     setSuggestions([])
+    await loadEventById(item.eventId)
+  }
+
+  /* ── Load an event straight by id — used by handleSelectEvent above,
+     and by the ?eventId= deep link below (e.g. from the Users admin
+     page's "Created Content" tab, or the Organizer ID link on this
+     event's own detail view). ── */
+  const loadEventById = async (eventId: string) => {
     setDetailError(null)
     setLoadingEvent(true)
     setViewState("eventDetails")
     try {
-      const res = await fetch(`/api/v1/event-data?action=getEventDetails&eventId=${item.eventId}`)
+      const res = await fetch(`/api/v1/event-data?action=getEventDetails&eventId=${eventId}`)
       const json = await res.json()
       if (!res.ok) throw new Error(json.error || "Failed to load event")
       setEventData(json.data)
@@ -180,6 +190,17 @@ export function EventDataClient() {
       setLoadingEvent(false)
     }
   }
+
+  /* ── &eventId= deep link — e.g. /admin-dashboard/event-data?eventId=xyz.
+     Jumps straight to that event's detail view on load, instead of
+     starting on the recent-events list. ── */
+  useEffect(() => {
+    const eventId = searchParams.get("eventId")
+    if (eventId) loadEventById(eventId)
+    // Only run once, off the initial param — not meant to re-trigger on
+    // every searchParams identity change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const handleBackToList = () => {
     setViewState("list")
@@ -293,8 +314,8 @@ export function EventDataClient() {
       {/* Header */}
       <div className="mb-8">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-lg bg-violet-50 flex items-center justify-center shrink-0">
-            <CalendarDays className="w-4 h-4 text-violet-600" />
+          <div className="w-9 h-9 rounded-lg bg-[#6b2fa5]/10 flex items-center justify-center shrink-0">
+            <CalendarDays className="w-4 h-4 text-[#6b2fa5]" />
           </div>
           <div>
             <h1 className="text-xl md:text-2xl font-bold text-slate-900 tracking-tight">Event Data</h1>
@@ -310,13 +331,13 @@ export function EventDataClient() {
         <div
           className={`relative flex items-center bg-white border transition-all duration-150 shadow-sm
             ${showSearchResults && suggestions.length > 0
-              ? "rounded-t-2xl border-b-transparent border-violet-300 shadow-md"
-              : "rounded-2xl border-slate-200 hover:border-slate-300 focus-within:border-violet-400 focus-within:shadow-md"
+              ? "rounded-t-2xl border-b-transparent border-[#6b2fa5]/40 shadow-md"
+              : "rounded-2xl border-slate-200 hover:border-slate-300 focus-within:border-[#6b2fa5]/60 focus-within:shadow-md"
             }`}
         >
           <div className="pl-4 shrink-0">
             {loadingSuggestions ? (
-              <div className="w-4 h-4 border-2 border-slate-200 border-t-violet-500 rounded-full animate-spin" />
+              <div className="w-4 h-4 border-2 border-slate-200 border-t-[#6b2fa5] rounded-full animate-spin" />
             ) : (
               <Search className="w-4 h-4 text-slate-400" />
             )}
@@ -343,7 +364,7 @@ export function EventDataClient() {
 
         {/* Search dropdown */}
         {showSearchResults && (
-          <div className="absolute top-full left-0 right-0 bg-white border border-t-0 border-violet-300 rounded-b-2xl overflow-hidden z-50 shadow-xl">
+          <div className="absolute top-full left-0 right-0 bg-white border border-t-0 border-[#6b2fa5]/40 rounded-b-2xl overflow-hidden z-50 shadow-xl">
             {suggestions.length > 0 ? (
               <>
                 <div className="px-4 pt-3 pb-1.5 flex items-center gap-2 border-b border-slate-100">
@@ -367,7 +388,7 @@ export function EventDataClient() {
                         )}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold text-slate-800 group-hover:text-violet-700 transition-colors truncate">
+                        <p className="text-sm font-semibold text-slate-800 group-hover:text-[#6b2fa5] transition-colors truncate">
                           {item.eventName}
                         </p>
                         <p className="text-xs text-slate-400 font-mono truncate mt-0.5">{item.eventId}</p>
@@ -390,7 +411,7 @@ export function EventDataClient() {
       <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
         <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <CalendarDays className="w-4 h-4 text-violet-500" />
+            <CalendarDays className="w-4 h-4 text-[#6b2fa5]" />
             <h2 className="font-semibold text-sm text-slate-700">Recent Events</h2>
             {!loadingList && (
               <span className="text-xs text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">{events.length}</span>
@@ -399,7 +420,7 @@ export function EventDataClient() {
           <button
             onClick={fetchRecentEvents}
             disabled={loadingList}
-            className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-violet-600 transition-colors disabled:opacity-40"
+            className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-[#6b2fa5] transition-colors disabled:opacity-40"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${loadingList ? "animate-spin" : ""}`} />
             Refresh
@@ -422,7 +443,7 @@ export function EventDataClient() {
         ) : listError ? (
           <div className="px-5 py-10 text-center space-y-2">
             <p className="text-sm text-red-500">{listError}</p>
-            <button onClick={fetchRecentEvents} className="text-xs text-violet-600 hover:underline">Try again</button>
+            <button onClick={fetchRecentEvents} className="text-xs text-[#6b2fa5] hover:underline">Try again</button>
           </div>
         ) : events.length === 0 ? (
           <div className="px-5 py-10 text-center">
@@ -444,7 +465,7 @@ export function EventDataClient() {
                   )}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-slate-800 group-hover:text-violet-700 transition-colors truncate">
+                  <p className="text-sm font-semibold text-slate-800 group-hover:text-[#6b2fa5] transition-colors truncate">
                     {item.eventName}
                   </p>
                   <p className="text-xs text-slate-400 font-mono truncate mt-0.5">{item.eventId}</p>
@@ -453,7 +474,7 @@ export function EventDataClient() {
                   <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${STATUS_PILL[item.status] || STATUS_PILL.active}`}>
                     {item.status}
                   </span>
-                  <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-violet-400 transition-colors" />
+                  <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-[#6b2fa5]/70 transition-colors" />
                 </div>
               </button>
             ))}
@@ -474,5 +495,13 @@ export function EventDataClient() {
       </div>
 
     </div>
+  )
+}
+
+export function EventDataClient() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center py-24">Loading...</div>}>
+      <EventDataClientInner />
+    </Suspense>
   )
 }

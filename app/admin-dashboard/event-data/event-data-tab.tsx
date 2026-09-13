@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import Link from "next/link"
 import {
   MapPin, Calendar, Clock, Ticket, Users, TrendingUp, Heart,
   Flag, EyeOff, Eye, ShieldBan, Trash2, AlertTriangle,
@@ -607,7 +608,15 @@ export default function EventDataTab({ eventData, onUpdate, onDeleted, adminUser
           <Link2 className="w-3 h-3" />
           <span>{event.id}</span>
           <span className="text-slate-300">·</span>
-          <span>Organizer: {event.organizerId}</span>
+          <span>
+            Organizer:{" "}
+            <Link
+              href={`/admin-dashboard/users?userId=${encodeURIComponent(event.organizerId)}`}
+              className="text-[#6b2fa5] hover:underline"
+            >
+              {event.organizerId}
+            </Link>
+          </span>
         </div>
       </div>
 
@@ -689,7 +698,6 @@ export default function EventDataTab({ eventData, onUpdate, onDeleted, adminUser
             ["Time", `${event.eventStart} – ${event.eventEnd}`],
             ["Venue", event.eventVenue],
             ["Type", event.eventType],
-            ["Organizer ID", event.organizerId],
             ["Affiliate", event.affiliateName || "None"],
             ["Collaboration", event.enabledCollaboration ? "Enabled" : "Disabled"],
             ["Agents Allowed", event.allowAgents ? "Yes" : "No"],
@@ -700,6 +708,15 @@ export default function EventDataTab({ eventData, onUpdate, onDeleted, adminUser
               <span className="text-xs text-slate-700 text-right font-mono break-all">{value}</span>
             </div>
           ))}
+          <div className="flex items-start justify-between gap-4 px-5 py-3 bg-slate-50/50 border-b border-slate-100 last:border-0">
+            <span className="text-xs text-slate-500 font-medium shrink-0">Organizer ID</span>
+            <Link
+              href={`/admin-dashboard/users?userId=${encodeURIComponent(event.organizerId)}`}
+              className="text-xs text-[#6b2fa5] text-right font-mono break-all hover:underline"
+            >
+              {event.organizerId}
+            </Link>
+          </div>
         </div>
       </div>
 

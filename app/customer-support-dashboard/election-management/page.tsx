@@ -1,0 +1,23 @@
+import type { Metadata } from "next"
+import { cookies } from "next/headers"
+import { redirect } from "next/navigation"
+import { adminAuth } from "@/lib/firebase-admin"
+import { ElectionManagementClient } from "./election-management-client"
+
+export const metadata: Metadata = { title: "Election Management | Customer Support Dashboard" }
+
+async function requireSession() {
+  const cookieStore = await cookies()
+  const sessionCookie = cookieStore.get("spotix_session")?.value
+  if (!sessionCookie) redirect("/login")
+  try {
+    await adminAuth.verifySessionCookie(sessionCookie, true)
+  } catch {
+    redirect("/login")
+  }
+}
+
+export default async function ElectionManagementPage() {
+  await requireSession()
+  return <ElectionManagementClient />
+}

@@ -10,7 +10,7 @@ import {
   ShoppingBag, Wallet, Users, UserPlus, Download,
   Settings, LogOut, Loader2, ClipboardList,
   SwitchCamera, FolderOpen, Globe, ShieldCheck, UserCheck, Landmark, Send, Scale,
-  ImageUp, HandCoins,
+  ImageUp, HandCoins, Award,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -48,6 +48,7 @@ const menuItems = [
   { id: "tasks",      label: "Tasks",      icon: ClipboardList, href: "/admin-dashboard/tasks",      active: true,  roles: ["admin"] },
   { id: "reports",    label: "Reports",    icon: FileText,      href: "/admin-dashboard/reports",    active: false, roles: ["admin"] },
   { id: "votes",      label: "Votes",      icon: Vote,          href: "/admin-dashboard/votes",      active: true  },
+  { id: "election-management", label: "Election Management", icon: Award, href: "/admin-dashboard/election-management", active: true },
   { id: "merch",      label: "Merch",      icon: ShoppingBag,   href: "/admin-dashboard/merch",      active: true, roles: ["admin"] },
   { id: "payouts",    label: "Payouts",    icon: Wallet,        href: "/admin-dashboard/payouts",    active: false, roles: ["admin"] },
   { id: "transfers",  label: "Transfers",  icon: Landmark,      href: "/admin-dashboard/transfers",  active: true,  roles: ["admin"] },
