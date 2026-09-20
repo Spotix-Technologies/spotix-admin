@@ -11,6 +11,7 @@
     "deploy": "next build && next start"
   },
   "dependencies": {
+    "@drexx-codes/numerox": "^1.0.0",
     "@supabase/supabase-js": "^2.112.3",
     "@upstash/redis": "^1.38.2",
     "bcryptjs": "^3.0.3",

@@ -6,7 +6,7 @@ import {
   MapPin, Calendar, Clock, Ticket, Users, TrendingUp, Heart,
   Flag, EyeOff, Eye, ShieldBan, Trash2, AlertTriangle,
   X, CheckCircle, DollarSign, Link2, Tag, Info, Wallet,
-  Loader2, AlertCircle, Percent, Settings2, Package,
+  Loader2, AlertCircle, Percent, Settings2, Package, Activity,
 } from "lucide-react"
 import AdminAttendeesTab from "./admin-attendees-tab"
 import PassesTab from "./passes-tab"
@@ -55,6 +55,7 @@ interface EventData {
   virtualQueueEnabled: boolean
   queueBatchSize: number
   queueSessionTTL: number
+  numeroxMaxDaysFetch?: number
   enabledCollaboration: boolean
   hasStopDate: boolean
   stopDate: string | null
@@ -219,6 +220,10 @@ export default function EventDataTab({ eventData, onUpdate, onDeleted, adminUser
   const [batchSizeInput, setBatchSizeInput] = useState("50")
   const [waitMinutesInput, setWaitMinutesInput] = useState("8")
   const [queueSettingsReason, setQueueSettingsReason] = useState("")
+
+  const [observabilityRetentionModal, setObservabilityRetentionModal] = useState(false)
+  const [numeroxMaxDaysInput, setNumeroxMaxDaysInput] = useState("5")
+  const [observabilityRetentionReason, setObservabilityRetentionReason] = useState("")
   const [pricingModal, setPricingModal] = useState(false)
   const [pctFeeInput, setPctFeeInput] = useState("5")
   const [flatFeeInput, setFlatFeeInput] = useState("0")
@@ -314,6 +319,20 @@ export default function EventDataTab({ eventData, onUpdate, onDeleted, adminUser
       setEvent(updated); onUpdate(updated)
       setQueueSettingsModal(false); setQueueSettingsReason("")
       showToast(`Queue settings updated — ${batchSize} admitted at a time, ${waitMinutes} min to check out`, "success")
+    } catch (e) { showToast(e instanceof Error ? e.message : "Failed", "error") }
+    finally { setSaving(null) }
+  }
+
+  const handleUpdateObservabilityRetentionConfirm = async () => {
+    const maxDaysFetch = parseInt(numeroxMaxDaysInput, 10)
+    if (!observabilityRetentionReason.trim() || !Number.isInteger(maxDaysFetch) || maxDaysFetch < 1 || maxDaysFetch > 365) return
+    setSaving("observabilityRetention")
+    try {
+      await patchEvent("updateObservabilityRetention", { numeroxMaxDaysFetch: maxDaysFetch }, observabilityRetentionReason)
+      const updated = { ...event, numeroxMaxDaysFetch: maxDaysFetch }
+      setEvent(updated); onUpdate(updated)
+      setObservabilityRetentionModal(false); setObservabilityRetentionReason("")
+      showToast(`Observability retention set to ${maxDaysFetch} day${maxDaysFetch === 1 ? "" : "s"} for this event`, "success")
     } catch (e) { showToast(e instanceof Error ? e.message : "Failed", "error") }
     finally { setSaving(null) }
   }
@@ -783,6 +802,43 @@ export default function EventDataTab({ eventData, onUpdate, onDeleted, adminUser
         </div>
       </div>
 
+      {/* ── OBSERVABILITY RETENTION ── */}
+      <div className={`rounded-2xl border overflow-hidden ${(event.numeroxMaxDaysFetch ?? 5) > 5 ? "border-purple-200 bg-purple-50/30" : "border-slate-200 bg-white"}`}>
+        <div className="px-5 py-4 border-b border-slate-100 flex items-center gap-2.5">
+          <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${(event.numeroxMaxDaysFetch ?? 5) > 5 ? "bg-purple-100 border border-purple-200" : "bg-slate-100 border border-slate-200"}`}>
+            <Activity className={`w-3.5 h-3.5 ${(event.numeroxMaxDaysFetch ?? 5) > 5 ? "text-[#6b2fa5]" : "text-slate-400"}`} />
+          </div>
+          <div>
+            <h3 className="font-semibold text-sm text-slate-800">Observability Retention</h3>
+            <p className="text-xs text-slate-500">How many days of funnel history this organizer can view on their Observability tab.</p>
+          </div>
+        </div>
+        <div className="p-5">
+          <div className="rounded-xl border border-slate-200 bg-white p-4 flex items-center justify-between gap-4">
+            <div className="flex items-center gap-5 flex-wrap">
+              <div>
+                <p className="text-[11px] uppercase tracking-wide text-slate-400 font-semibold">Max days fetch</p>
+                <p className="text-sm font-bold text-slate-800">{event.numeroxMaxDaysFetch ?? 5} days</p>
+              </div>
+              {(event.numeroxMaxDaysFetch ?? 5) === 5 && (
+                <p className="text-xs text-slate-400 max-w-xs">Default for every event — raise it here for post-event reporting or a specific organizer's needs.</p>
+              )}
+            </div>
+            <button
+              onClick={() => {
+                setNumeroxMaxDaysInput(String(event.numeroxMaxDaysFetch ?? 5))
+                setObservabilityRetentionReason("")
+                setObservabilityRetentionModal(true)
+              }}
+              disabled={saving === "observabilityRetention"}
+              className="shrink-0 px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100 transition-colors disabled:opacity-50"
+            >
+              Edit Retention
+            </button>
+          </div>
+        </div>
+      </div>
+
       {/* ── PLATFORM FEES ── */}
       {canModerate && (
       <div className={`rounded-2xl border overflow-hidden ${isPricingCustomised ? "border-purple-200 bg-purple-50/30" : "border-slate-200 bg-white"}`}>
@@ -1093,6 +1149,30 @@ export default function EventDataTab({ eventData, onUpdate, onDeleted, adminUser
           </div>
         </div>
         <ReasonTextarea value={queueSettingsReason} onChange={setQueueSettingsReason} />
+      </ActionModal>
+
+      <ActionModal
+        open={observabilityRetentionModal}
+        onClose={() => { setObservabilityRetentionModal(false); setObservabilityRetentionReason("") }}
+        title="Edit Observability retention"
+        description="How many days of funnel history (page views → checkout → payment) this event's organizer can query on their Observability tab. Every event defaults to 5 days."
+        onConfirm={handleUpdateObservabilityRetentionConfirm}
+        confirmLabel="Save Retention"
+        loading={saving === "observabilityRetention"}
+        confirmDisabled={!observabilityRetentionReason.trim() || !numeroxMaxDaysInput.trim()}
+      >
+        <div className="mb-3">
+          <label className="text-xs font-medium text-slate-500 mb-1.5 block">Max days fetch</label>
+          <input
+            type="number"
+            min={1}
+            max={365}
+            value={numeroxMaxDaysInput}
+            onChange={(e) => setNumeroxMaxDaysInput(e.target.value)}
+            className="w-full text-sm bg-white border border-slate-200 rounded-lg px-3 py-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#6b2fa5/30] focus:border-[#6b2fa5]"
+          />
+        </div>
+        <ReasonTextarea value={observabilityRetentionReason} onChange={setObservabilityRetentionReason} />
       </ActionModal>
 
       <ActionModal

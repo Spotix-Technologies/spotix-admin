@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      '@drexx-codes/numerox':
+        specifier: ^1.0.0
+        version: 1.0.0(firebase-admin@13.6.0)
       '@supabase/supabase-js':
         specifier: ^2.112.3
         version: 2.112.3(@opentelemetry/api@1.9.0)
@@ -145,6 +148,15 @@ packages:
     engines: {node: '>=14.21.3'}
     cpu: [x64]
     os: [win32]
+
+  '@drexx-codes/numerox@1.0.0':
+    resolution: {integrity: sha512-Q9FBibC2FKKiASy+5JBkis/ERQ0Wje4nt9G8MRqi46p3pHbQEvrVeIvQeduEeju8USFVMbI2KqFSwjmaJe/wKA==}
+    engines: {node: '>=18.18'}
+    peerDependencies:
+      firebase-admin: '>=11 <14'
+    peerDependenciesMeta:
+      firebase-admin:
+        optional: true
 
   '@effect/platform@0.90.3':
     resolution: {integrity: sha512-XvQ37yzWQKih4Du2CYladd1i/MzqtgkTPNCaN6Ku6No4CK83hDtXIV/rP03nEoBg2R3Pqgz6gGWmE2id2G81HA==}
@@ -1997,6 +2009,10 @@ snapshots:
 
   '@biomejs/cli-win32-x64@2.2.0':
     optional: true
+
+  '@drexx-codes/numerox@1.0.0(firebase-admin@13.6.0)':
+    optionalDependencies:
+      firebase-admin: 13.6.0
 
   '@effect/platform@0.90.3(effect@3.17.7)':
     dependencies:

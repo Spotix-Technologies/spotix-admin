@@ -25,7 +25,7 @@ export function ElectionManagementClient() {
         </div>
       </div>
 
-      <ElectionsListPanel apiBase="admin-elections" canEditFees={canEditFees} />
+      <ElectionsListPanel apiBase="admin-elections" canEditFees={canEditFees} adminUsername={session?.username ?? "Admin"} />
     </div>
   )
 }

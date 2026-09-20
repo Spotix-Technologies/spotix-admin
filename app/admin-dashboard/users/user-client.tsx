@@ -6,6 +6,7 @@ import { UserDetailsComponent } from "./components/user-details"
 import { PayoutMethodsComponent } from "./components/payout-methods"
 import { UserTicketsComponent } from "./components/user-tickets"
 import { UserSessionsComponent } from "./components/user-sessions"
+import { MapAccessComponent } from "./components/map-access"
 import {
   UserCreatedContentComponent,
   type UserEventSummary,
@@ -16,7 +17,7 @@ import {
 } from "./components/user-created-content"
 import { Search, LayoutGrid } from "lucide-react"
 
-type Tab = "details" | "payouts" | "tickets" | "sessions" | "created"
+type Tab = "details" | "payouts" | "tickets" | "sessions" | "created" | "mapAccess"
 
 function UsersClientInner() {
   const searchParams = useSearchParams()
@@ -325,7 +326,7 @@ function UsersClientInner() {
         <div className="space-y-6">
           {/* Tabs */}
           <div className="flex gap-2 border-b border-slate-200 flex-wrap">
-            {(["details", "payouts", "tickets", "sessions", "created"] as const).map((tab) => (
+            {(["details", "payouts", "tickets", "sessions", "created", "mapAccess"] as const).map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
@@ -341,6 +342,7 @@ function UsersClientInner() {
                 {tab === "tickets" && "Tickets"}
                 {tab === "sessions" && "Sessions"}
                 {tab === "created" && "Created Content"}
+                {tab === "mapAccess" && "Map Access"}
               </button>
             ))}
           </div>
@@ -399,6 +401,10 @@ function UsersClientInner() {
               loadingMerch={loadingMerch}
               merchError={merchError}
             />
+          )}
+
+          {activeTab === "mapAccess" && (
+            <MapAccessComponent email={selectedEmail} userId={selectedUserId} />
           )}
         </div>
       )}

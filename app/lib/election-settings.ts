@@ -124,7 +124,86 @@ export async function setElectionFeeSettings(
   return getElectionFeeSettings(electionId)
 }
 
-// ── Elections list (for the Election Management page) ──────────────────────
+// ── Suspension (Spotix-level "kill switch") ─────────────────────────────────
+//
+// Distinct from the election's own `status` (draft/scheduled/active/ended,
+// organiser-controlled lifecycle) — `suspended` is a Spotix override on top
+// of whatever status the election is in. Candidates and voters see a
+// dedicated "Spotix has suspended this election" notice in spotix-vote
+// (see lib/election/db.ts's ElectionRow + the pages that check it), the
+// organiser sees a banner in spotix-booker, and payouts are refused
+// server-side (spotix-booker's /api/elections/[id]/payout) regardless of
+// what the UI shows — see that route's suspended check.
+
+export async function suspendElection(electionId: string, reason: string | null, adminUid: string, adminName: string) {
+  const { error } = await supabaseAdmin
+    .from("elections")
+    .update({
+      suspended: true,
+      suspended_reason: reason?.trim() || null,
+      suspended_at: new Date().toISOString(),
+      suspended_by_uid: adminUid,
+      suspended_by_name: adminName,
+    })
+    .eq("id", electionId)
+  if (error) throw new Error(error.message)
+}
+
+export async function unsuspendElection(electionId: string) {
+  const { error } = await supabaseAdmin
+    .from("elections")
+    .update({ suspended: false, suspended_reason: null, suspended_at: null, suspended_by_uid: null, suspended_by_name: null })
+    .eq("id", electionId)
+  if (error) throw new Error(error.message)
+}
+
+// ── Candidates (read-only, for the Election Management page) ───────────────
+
+export interface AdminCandidateItem {
+  id: string
+  officeId: string
+  officeName: string
+  fullName: string
+  email: string
+  phone: string
+  photoUrl: string | null
+  voteCount: number
+  paid: boolean
+  formReference: string | null
+  createdAt: string | null
+}
+
+/** Every candidate across every office in one election — admin read access only, no write path here. */
+export async function listCandidatesForAdmin(electionId: string): Promise<AdminCandidateItem[]> {
+  const { data: offices, error: officesErr } = await supabaseAdmin
+    .from("election_offices")
+    .select("id, name")
+    .eq("election_id", electionId)
+  if (officesErr) throw new Error(officesErr.message)
+
+  const officeNames = new Map((offices ?? []).map((o) => [o.id, o.name as string]))
+
+  const { data, error } = await supabaseAdmin
+    .from("election_candidates")
+    .select("id, office_id, full_name, email, phone, photo_url, vote_count, form_reference, created_at")
+    .eq("election_id", electionId)
+    .order("created_at", { ascending: false })
+  if (error) throw new Error(error.message)
+
+  return (data ?? []).map((row) => ({
+    id: row.id,
+    officeId: row.office_id,
+    officeName: officeNames.get(row.office_id) ?? "Unknown office",
+    fullName: row.full_name ?? "",
+    email: row.email ?? "",
+    phone: row.phone ?? "",
+    photoUrl: row.photo_url ?? null,
+    voteCount: row.vote_count ?? 0,
+    paid: !!row.form_reference,
+    formReference: row.form_reference ?? null,
+    createdAt: row.created_at ?? null,
+  }))
+}
 
 export interface ElectionListItem {
   id: string
@@ -134,19 +213,25 @@ export interface ElectionListItem {
   resultsPublished: boolean
   votingStartsAt: string | null
   votingEndsAt: string | null
+  registrationStartsAt: string | null
+  registrationEndsAt: string | null
   allowVoterPrefill: boolean
   createdAt: string | null
   platformFeePercent: number
   platformFeeFlat: number
   paystackFeePayer: ElectionPaystackFeePayer
   isFeeCustomized: boolean
+  suspended: boolean
+  suspendedReason: string | null
+  suspendedAt: string | null
+  suspendedByName: string | null
 }
 
 export async function listElectionsForAdmin(limit = 100): Promise<ElectionListItem[]> {
   const { data, error } = await supabaseAdmin
     .from("elections")
     .select(
-      "id, name, status, organizer_id, results_published, voting_starts_at, voting_ends_at, allow_voter_prefill, created_at, platform_fee_percent, platform_fee_flat, paystack_fee_payer"
+      "id, name, status, organizer_id, results_published, voting_starts_at, voting_ends_at, registration_starts_at, registration_ends_at, allow_voter_prefill, created_at, platform_fee_percent, platform_fee_flat, paystack_fee_payer, suspended, suspended_reason, suspended_at, suspended_by_name"
     )
     .order("created_at", { ascending: false })
     .limit(limit)
@@ -166,12 +251,18 @@ export async function listElectionsForAdmin(limit = 100): Promise<ElectionListIt
       resultsPublished: row.results_published ?? false,
       votingStartsAt: row.voting_starts_at ?? null,
       votingEndsAt: row.voting_ends_at ?? null,
+      registrationStartsAt: row.registration_starts_at ?? null,
+      registrationEndsAt: row.registration_ends_at ?? null,
       allowVoterPrefill: row.allow_voter_prefill ?? false,
       createdAt: row.created_at ?? null,
       platformFeePercent: percent.value,
       platformFeeFlat: flat.value,
       paystackFeePayer: payer.value,
       isFeeCustomized: percent.customized || flat.customized || payer.customized,
+      suspended: row.suspended ?? false,
+      suspendedReason: row.suspended_reason ?? null,
+      suspendedAt: row.suspended_at ?? null,
+      suspendedByName: row.suspended_by_name ?? null,
     }
   })
 }

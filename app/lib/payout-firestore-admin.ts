@@ -24,11 +24,16 @@ export async function listPollTransactions(pollId: string) {
   return snap.docs.map((doc) => ({ date: doc.id, ...doc.data() })).sort((a: any, b: any) => a.date.localeCompare(b.date))
 }
 
+export async function listElectionTransactions(electionId: string) {
+  const snap = await adminDb.collection("admin").doc("elections").collection(electionId).get()
+  return snap.docs.map((doc) => ({ date: doc.id, ...doc.data() })).sort((a: any, b: any) => a.date.localeCompare(b.date))
+}
+
 // ── Date-doc reference stamping ─────────────────────────────────────────────
 
-export async function writePayoutReferenceOnDateDoc(scope: { eventId?: string; pollId?: string }, date: string, reference: string) {
-  const root = scope.eventId ? "events" : "votes"
-  const id = scope.eventId ?? scope.pollId!
+export async function writePayoutReferenceOnDateDoc(scope: { eventId?: string; pollId?: string; electionId?: string }, date: string, reference: string) {
+  const root = scope.eventId ? "events" : scope.pollId ? "votes" : "elections"
+  const id = scope.eventId ?? scope.pollId ?? scope.electionId!
   const ref = adminDb.collection("admin").doc(root).collection(id).doc(date)
   try {
     await ref.update({ payoutReference: reference, payoutReferenceAt: FieldValue.serverTimestamp() })
@@ -38,9 +43,9 @@ export async function writePayoutReferenceOnDateDoc(scope: { eventId?: string; p
 }
 
 /** Revert: clears the reference so the Transactions view stops pointing at a deleted row. */
-export async function clearPayoutReferenceOnDateDoc(scope: { eventId?: string; pollId?: string }, date: string) {
-  const root = scope.eventId ? "events" : "votes"
-  const id = scope.eventId ?? scope.pollId!
+export async function clearPayoutReferenceOnDateDoc(scope: { eventId?: string; pollId?: string; electionId?: string }, date: string) {
+  const root = scope.eventId ? "events" : scope.pollId ? "votes" : "elections"
+  const id = scope.eventId ?? scope.pollId ?? scope.electionId!
   const ref = adminDb.collection("admin").doc(root).collection(id).doc(date)
   try {
     await ref.update({ payoutReference: FieldValue.delete(), payoutReferenceAt: FieldValue.delete() })

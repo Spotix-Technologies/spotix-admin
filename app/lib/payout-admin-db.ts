@@ -29,10 +29,11 @@ export function generatePayoutReference(): string {
 }
 
 export function buildNarration({
-  isEvent, isPoll, eventName, pollName, payDate,
-}: { isEvent: boolean; isPoll: boolean; eventName?: string | null; pollName?: string | null; payDate: string }): string {
+  isEvent, isPoll, isElection, eventName, pollName, electionName, payDate,
+}: { isEvent: boolean; isPoll: boolean; isElection?: boolean; eventName?: string | null; pollName?: string | null; electionName?: string | null; payDate: string }): string {
   if (isEvent) return `Payout for your ${eventName || "event"} event for ${payDate}`
   if (isPoll) return `Payout for your ${pollName || "poll"} poll for ${payDate}`
+  if (isElection) return `Payout for your ${electionName || "election"} election for ${payDate}`
   return `Spotix payout for ${payDate}`
 }
 
@@ -41,10 +42,13 @@ export interface PayoutRow {
   reference: string
   is_event: boolean
   is_poll: boolean
+  is_election: boolean
   event_id: string | null
   poll_id: string | null
+  election_id: string | null
   event_name: string | null
   poll_name: string | null
+  election_name: string | null
   pay_date: string
   user_id: string
   amount: number
@@ -82,6 +86,12 @@ export async function getPayoutsForPoll(pollId: string): Promise<PayoutRow[]> {
   return (data ?? []) as PayoutRow[]
 }
 
+export async function getPayoutsForElection(electionId: string): Promise<PayoutRow[]> {
+  const { data, error } = await supabaseAdmin.from("payouts").select("*").eq("election_id", electionId).order("created_at", { ascending: false })
+  if (error) throw new Error(error.message)
+  return (data ?? []) as PayoutRow[]
+}
+
 export async function getPayoutByReference(reference: string): Promise<PayoutRow | null> {
   const { data, error } = await supabaseAdmin.from("payouts").select("*").eq("reference", reference).maybeSingle()
   if (error) throw new Error(error.message)
@@ -89,9 +99,9 @@ export async function getPayoutByReference(reference: string): Promise<PayoutRow
 }
 
 /** Same dedupe rule as the booker app: any non-"failed" row for this date blocks a new one. */
-export async function hasActiveOrSuccessfulPayout(scope: { eventId?: string; pollId?: string }, payDate: string): Promise<boolean> {
+export async function hasActiveOrSuccessfulPayout(scope: { eventId?: string; pollId?: string; electionId?: string }, payDate: string): Promise<boolean> {
   let query = supabaseAdmin.from("payouts").select("id, status").eq("pay_date", payDate)
-  query = scope.eventId ? query.eq("event_id", scope.eventId) : query.eq("poll_id", scope.pollId!)
+  query = scope.eventId ? query.eq("event_id", scope.eventId) : scope.pollId ? query.eq("poll_id", scope.pollId) : query.eq("election_id", scope.electionId!)
   const { data, error } = await query
   if (error) throw new Error(error.message)
   return (data ?? []).some((r) => r.status !== "failed")
@@ -109,12 +119,15 @@ export interface AdminPayoutMethod {
 export interface CreateAdminPayoutInput {
   isEvent: boolean
   isPoll: boolean
+  isElection?: boolean
   eventId?: string | null
   pollId?: string | null
+  electionId?: string | null
   eventName?: string | null
   pollName?: string | null
+  electionName?: string | null
   payDate: string
-  /** The BENEFICIARY (event/poll owner) — not the admin. totalPaidOut analytics attach to this uid. */
+  /** The BENEFICIARY (event/poll/election owner) — not the admin. totalPaidOut analytics attach to this uid. */
   beneficiaryUserId: string
   amount: number
   method: AdminPayoutMethod
@@ -126,15 +139,16 @@ export interface CreateAdminPayoutInput {
 /**
  * Inserts a row that is ALREADY "successful" — no Paystack call, no
  * initializing/processing window. The same partial unique index that
- * protects the booker flow (one non-failed row per event/date, or
- * poll/date) applies here identically, so this can't double-pay a date
- * that already has an active or successful payout from ANY source —
+ * protects the booker flow (one non-failed row per event/date, poll/date,
+ * or election/date) applies here identically, so this can't double-pay a
+ * date that already has an active or successful payout from ANY source —
  * booker-initiated or admin-initiated.
  */
 export async function createAdminInitiatedPayout(input: CreateAdminPayoutInput): Promise<PayoutRow> {
   const reference = generatePayoutReference()
   const narration = buildNarration({
-    isEvent: input.isEvent, isPoll: input.isPoll, eventName: input.eventName, pollName: input.pollName, payDate: input.payDate,
+    isEvent: input.isEvent, isPoll: input.isPoll, isElection: input.isElection,
+    eventName: input.eventName, pollName: input.pollName, electionName: input.electionName, payDate: input.payDate,
   })
   const now = new Date().toISOString()
 
@@ -144,10 +158,13 @@ export async function createAdminInitiatedPayout(input: CreateAdminPayoutInput):
       reference,
       is_event: input.isEvent,
       is_poll: input.isPoll,
+      is_election: input.isElection ?? false,
       event_id: input.eventId ?? null,
       poll_id: input.pollId ?? null,
+      election_id: input.electionId ?? null,
       event_name: input.eventName ?? null,
       poll_name: input.pollName ?? null,
+      election_name: input.electionName ?? null,
       pay_date: input.payDate,
       user_id: input.beneficiaryUserId,
       amount: input.amount,

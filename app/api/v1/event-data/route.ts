@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { adminDb } from "@/lib/firebase-admin"
 import { FieldValue } from "firebase-admin/firestore"
 import { verifyAdminAccess } from "@/lib/verify-admin"
+import { cacheDel, eventDocCacheKey } from "@/lib/redis-admin"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -202,6 +203,7 @@ export async function GET(request: NextRequest) {
           virtualQueueEnabled: d.virtualQueueEnabled ?? false,
           queueBatchSize: d.queueBatchSize ?? 50,
           queueSessionTTL: d.queueSessionTTL ?? 480,
+          numeroxMaxDaysFetch: d.numeroxMaxDaysFetch ?? 5,
           enabledCollaboration: d.enabledCollaboration ?? false,
           hasStopDate: d.hasStopDate ?? false,
           stopDate: d.stopDate || null,
@@ -298,6 +300,18 @@ export async function PATCH(request: NextRequest) {
         transaction.update(eventRef, updates)
         if (Object.keys(changes).length) transaction.create(eventRef.collection("editHistory").doc(), { action: "event_updated", actor: { uid: admin.uid, type: "Spotix", role: admin.role, username: admin.username }, reason, changes, createdAt: FieldValue.serverTimestamp() })
       })
+
+      // Bust spotix-user's cached event doc (same Upstash instance — see
+      // lib/redis-admin.ts) so the public event page reflects this edit
+      // immediately instead of waiting out its TTL. This route is reached
+      // from all three dashboards (admin, exec-assistant, customer-support
+      // event-data tabs), so one invalidation here covers all of them.
+      // Non-blocking — a failure here just means the next read waits out
+      // the TTL as before.
+      cacheDel(eventDocCacheKey(eventId)).catch((err) =>
+        console.error(`[PATCH editEvent] Cache invalidation failed for event ${eventId}:`, err)
+      )
+
       return NextResponse.json({ success: true, message: "Event updated", data: updates, developer: DEV_TAG }, { status: 200 })
     }
 
@@ -391,6 +405,34 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({
         success: true,
         message: `Queue settings updated — ${batchSize} admitted at a time, ${waitMinutes} min to check out`,
+        developer: DEV_TAG,
+      }, { status: 200 })
+    }
+
+    if (action === "updateObservabilityRetention") {
+      // How many days of Numerox funnel history (page views → checkout →
+      // payment) this event's organizer can query on their Observability
+      // tab. Every event defaults to 5 days (spotix-booker's
+      // app/lib/numerox-max-days.ts falls back to this when the field is
+      // absent) — this lets an admin raise it for a specific event, e.g.
+      // for post-event reporting. Numerox itself never sees or enforces
+      // this default; it only enforces whatever ceiling spotix-booker
+      // passes into createNumeroxClient({ maxDaysFetch }) per request.
+      const { numeroxMaxDaysFetch } = body
+      const maxDaysFetch = Number(numeroxMaxDaysFetch)
+
+      if (!Number.isInteger(maxDaysFetch) || maxDaysFetch < 1 || maxDaysFetch > 365) {
+        return NextResponse.json({ error: "numeroxMaxDaysFetch must be a whole number between 1 and 365", developer: DEV_TAG }, { status: 400 })
+      }
+
+      await eventRef.update({
+        numeroxMaxDaysFetch: maxDaysFetch,
+        updatedAt: new Date(),
+        observabilityRetentionAudit: FieldValue.arrayUnion({ ...auditEntry, numeroxMaxDaysFetch: maxDaysFetch }),
+      })
+      return NextResponse.json({
+        success: true,
+        message: `Observability retention set to ${maxDaysFetch} day${maxDaysFetch === 1 ? "" : "s"}`,
         developer: DEV_TAG,
       }, { status: 200 })
     }

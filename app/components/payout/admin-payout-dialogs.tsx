@@ -20,10 +20,10 @@ interface PayoutRecord {
   status: "initializing" | "processing" | "successful" | "failed"
 }
 
-/* ── Admin-pay confirmation dialog (shared shape for event/poll) ── */
+/* ── Admin-pay confirmation dialog (shared shape for event/poll/election) ── */
 export function AdminPayDialog({
   scope, id, date, adminUsername, onClose, onSuccess,
-}: { scope: "event" | "poll"; id: string; date: string; adminUsername: string; onClose: () => void; onSuccess: () => void }) {
+}: { scope: "event" | "poll" | "election"; id: string; date: string; adminUsername: string; onClose: () => void; onSuccess: () => void }) {
   const [loading, setLoading] = useState(true)
   const [method, setMethod] = useState<{ bankName: string; accountName: string; accountNumber: string } | null>(null)
   const [methodError, setMethodError] = useState<string | null>(null)
@@ -33,7 +33,12 @@ export function AdminPayDialog({
   const [idempotencyKey] = useState(() => crypto.randomUUID())
 
   useEffect(() => {
-    const methodUrl = scope === "event" ? `/api/v1/event-data/payout-method?eventId=${id}` : `/api/v1/admin-polls/payout-method?pollId=${id}`
+    const methodUrl =
+      scope === "event"
+        ? `/api/v1/event-data/payout-method?eventId=${id}`
+        : scope === "poll"
+          ? `/api/v1/admin-polls/payout-method?pollId=${id}`
+          : `/api/v1/admin-elections/${id}/payout-method`
     fetch(methodUrl)
       .then((r) => r.json())
       .then((json) => {
@@ -48,8 +53,14 @@ export function AdminPayDialog({
     setSubmitting(true)
     setSubmitError(null)
     try {
-      const url = scope === "event" ? "/api/v1/event-data/admin-payout" : "/api/v1/admin-polls/admin-payout"
-      const body: Record<string, any> = scope === "event" ? { eventId: id, date, confirmVaultOverride } : { pollId: id, date }
+      const url =
+        scope === "event"
+          ? "/api/v1/event-data/admin-payout"
+          : scope === "poll"
+            ? "/api/v1/admin-polls/admin-payout"
+            : `/api/v1/admin-elections/${id}/payouts`
+      const body: Record<string, any> =
+        scope === "event" ? { eventId: id, date, confirmVaultOverride } : scope === "poll" ? { pollId: id, date } : { date }
       const res = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey },
@@ -97,7 +108,7 @@ export function AdminPayDialog({
               )}
               <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 text-sm space-y-1">
                 <p className="text-slate-700"><span className="font-semibold">{method.bankName}</span></p>
-                <p className="text-slate-500 text-xs">{method.accountName} · •••• {method.accountNumber.slice(-4)}</p>
+                <p className="text-slate-500 text-xs">{method.accountName} · {method.accountNumber}</p>
               </div>
               <p className="text-xs text-slate-400">This will be recorded as an admin-initiated payout under your name ({adminUsername}) and marked successful immediately — no Paystack transfer is made by this action.</p>
               {submitError && <div className="flex items-start gap-2.5 p-3 rounded-lg text-xs bg-red-50 border border-red-200 text-red-700"><AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />{submitError}</div>}
@@ -125,7 +136,7 @@ export function AdminPayDialog({
 /* ── Revert confirmation dialog ── */
 export function RevertDialog({
   scope, id, payout, onClose, onSuccess,
-}: { scope: "event" | "poll"; id: string; payout: PayoutRecord; onClose: () => void; onSuccess: () => void }) {
+}: { scope: "event" | "poll" | "election"; id: string; payout: PayoutRecord; onClose: () => void; onSuccess: () => void }) {
   const [reason, setReason] = useState("")
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -135,8 +146,18 @@ export function RevertDialog({
     setSubmitting(true)
     setError(null)
     try {
-      const url = scope === "event" ? "/api/v1/event-data/revert-payout" : "/api/v1/admin-polls/revert-payout"
-      const body = scope === "event" ? { eventId: id, reference: payout.reference, reason } : { pollId: id, reference: payout.reference, reason }
+      const url =
+        scope === "event"
+          ? "/api/v1/event-data/revert-payout"
+          : scope === "poll"
+            ? "/api/v1/admin-polls/revert-payout"
+            : `/api/v1/admin-elections/${id}/revert-payout`
+      const body =
+        scope === "event"
+          ? { eventId: id, reference: payout.reference, reason }
+          : scope === "poll"
+            ? { pollId: id, reference: payout.reference, reason }
+            : { reference: payout.reference, reason }
       const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error || "Failed to revert payout")

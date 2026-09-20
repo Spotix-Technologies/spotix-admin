@@ -17,8 +17,11 @@
  */
 
 import { useState, useEffect, useMemo } from "react"
-import { Search, Loader2, Vote as VoteIcon, ShieldAlert, ChevronDown, Percent } from "lucide-react"
+import { Search, Loader2, Vote as VoteIcon, ShieldAlert, ChevronDown, Percent, UserCheck, Wallet } from "lucide-react"
 import ElectionFeeEditor from "./election-fee-editor"
+import ElectionSuspendControl from "./election-suspend-control"
+import ElectionCandidatesPanel from "./election-candidates-panel"
+import AdminElectionPayoutsPanel from "@/components/payout/admin-election-payouts-panel"
 
 interface ElectionListItem {
   id: string
@@ -28,13 +31,19 @@ interface ElectionListItem {
   resultsPublished: boolean
   votingStartsAt: string | null
   votingEndsAt: string | null
+  registrationStartsAt: string | null
+  registrationEndsAt: string | null
   allowVoterPrefill: boolean
   createdAt: string | null
   platformFeePercent: number
   platformFeeFlat: number
   paystackFeePayer: "voter" | "organizer" | "none"
   isFeeCustomized: boolean
+  suspended: boolean
+  suspendedReason: string | null
 }
+
+type ExpandedTab = "fee" | "suspend" | "candidates" | "payouts"
 
 const STATUS_STYLES: Record<string, string> = {
   draft: "bg-gray-100 text-gray-600",
@@ -46,17 +55,20 @@ const STATUS_STYLES: Record<string, string> = {
 export default function ElectionsListPanel({
   apiBase,
   canEditFees,
+  adminUsername = "Admin",
 }: {
   apiBase: "admin-elections" | "support-elections"
   canEditFees: boolean
+  adminUsername?: string
 }) {
   const [elections, setElections] = useState<ElectionListItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [query, setQuery] = useState("")
   const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [activeTab, setActiveTab] = useState<ExpandedTab>("fee")
 
-  useEffect(() => {
+  function load() {
     setLoading(true)
     fetch(`/api/v1/${apiBase}/list`)
       .then((r) => r.json())
@@ -66,7 +78,9 @@ export default function ElectionsListPanel({
       })
       .catch((e) => setError(e.message || "Failed to load elections"))
       .finally(() => setLoading(false))
-  }, [apiBase])
+  }
+
+  useEffect(load, [apiBase])
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -81,7 +95,7 @@ export default function ElectionsListPanel({
         <div>
           <h3 className="font-semibold text-sm text-gray-900">Elections</h3>
           <p className="text-xs mt-0.5 text-gray-500">
-            {canEditFees ? "Tap an election to view or edit its platform fee" : "Tap an election to view its platform fee"}
+            Tap an election to manage its platform fee, suspension, candidates, and payouts
           </p>
         </div>
       </div>
@@ -122,7 +136,11 @@ export default function ElectionsListPanel({
                 <div key={e.id} className="rounded-lg border border-gray-100 overflow-hidden">
                   <button
                     type="button"
-                    onClick={() => setExpandedId(isOpen ? null : e.id)}
+                    onClick={() => {
+                      const next = isOpen ? null : e.id
+                      setExpandedId(next)
+                      setActiveTab("fee")
+                    }}
                     className="w-full flex items-center justify-between gap-3 p-3 bg-gray-50 hover:bg-gray-100 transition-colors text-left"
                   >
                     <div className="min-w-0">
@@ -132,6 +150,11 @@ export default function ElectionsListPanel({
                       </p>
                     </div>
                     <div className="shrink-0 flex items-center gap-2">
+                      {e.suspended && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-700">
+                          <ShieldAlert className="w-3 h-3" /> Suspended
+                        </span>
+                      )}
                       <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ${STATUS_STYLES[e.status] ?? "bg-gray-100 text-gray-600"}`}>
                         {e.status}
                       </span>
@@ -152,7 +175,46 @@ export default function ElectionsListPanel({
                     </div>
                   </button>
 
-                  {isOpen && <ElectionFeeEditor apiBase={apiBase} electionId={e.id} canEdit={canEditFees} />}
+                  {isOpen && (
+                    <div>
+                      <div className="flex gap-1 border-b border-gray-100 bg-white px-3 pt-2">
+                        {(
+                          [
+                            { id: "fee", label: "Fee", icon: <Percent className="w-3.5 h-3.5" /> },
+                            { id: "suspend", label: "Suspend", icon: <ShieldAlert className="w-3.5 h-3.5" /> },
+                            { id: "candidates", label: "Candidates", icon: <UserCheck className="w-3.5 h-3.5" /> },
+                            { id: "payouts", label: "Payouts", icon: <Wallet className="w-3.5 h-3.5" /> },
+                          ] as { id: ExpandedTab; label: string; icon: React.ReactNode }[]
+                        ).map((tab) => (
+                          <button
+                            key={tab.id}
+                            onClick={() => setActiveTab(tab.id)}
+                            className={`flex items-center gap-1.5 px-3 py-2 text-xs font-semibold border-b-2 transition-colors ${
+                              activeTab === tab.id ? "border-[#6b2fa5] text-[#6b2fa5]" : "border-transparent text-gray-500 hover:text-gray-700"
+                            }`}
+                          >
+                            {tab.icon} {tab.label}
+                          </button>
+                        ))}
+                      </div>
+                      <div className="p-4 bg-white">
+                        {activeTab === "fee" && <ElectionFeeEditor apiBase={apiBase} electionId={e.id} canEdit={canEditFees} />}
+                        {activeTab === "suspend" && (
+                          <ElectionSuspendControl
+                            electionId={e.id}
+                            suspended={e.suspended}
+                            suspendedReason={e.suspendedReason}
+                            canManage={canEditFees}
+                            onChanged={load}
+                          />
+                        )}
+                        {activeTab === "candidates" && <ElectionCandidatesPanel electionId={e.id} />}
+                        {activeTab === "payouts" && (
+                          <AdminElectionPayoutsPanel electionId={e.id} adminUsername={adminUsername} canManage={canEditFees} suspended={e.suspended} />
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )
             })}
