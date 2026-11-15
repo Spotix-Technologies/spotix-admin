@@ -29,6 +29,16 @@ export function eventDocCacheKey(eventId: string): string {
   return `event:doc:${eventId}`
 }
 
+/**
+ * Matches v1/lib/campaigns/packages.js's ACTIVE_PACKAGES_CACHE_KEY on the
+ * backend exactly — same shared Upstash instance, same key. Busted here
+ * so an admin pricing edit (app/api/v1/admin/global/email-credit-packages)
+ * shows up immediately instead of waiting out the backend's hourly TTL.
+ */
+export function activePackagesCacheKey(): string {
+  return "campaigns:active-packages"
+}
+
 export async function cacheDel(key: string): Promise<void> {
   try {
     await redis.del(key)

@@ -17,6 +17,7 @@ export default async function Layout({ children }: { children: React.ReactNode }
         { label: "Requisition", href: "/it-dashboard/requisition", iconName: "HandCoins" },
         { label: "Storage", href: "/it-dashboard/storage", iconName: "ImageUp" },
         { label: "Payments", href: "/it-dashboard/payments", iconName: "Wallet" },
+        { label: "Campaigns", href: "/it-dashboard/campaigns", iconName: "Mail" },
       ]}
     >
       {children}

@@ -10,7 +10,7 @@ import {
   ShoppingBag, Wallet, Users, UserPlus, Download,
   Settings, LogOut, Loader2, ClipboardList,
   SwitchCamera, FolderOpen, Globe, ShieldCheck, UserCheck, Landmark, Send, Scale,
-  ImageUp, HandCoins, Award,
+  ImageUp, HandCoins, Award, Mail, Handshake, SlidersHorizontal,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -42,6 +42,8 @@ const menuItems = [
   { id: "references",   label: "References",   icon: Receipt,       href: "/admin-dashboard/references",        active: true  },
   { id: "event-data",   label: "Event Data",   icon: CalendarDays,  href: "/admin-dashboard/event-data",        active: true,  roles: ["admin", "customer-support", "exec-assistant"] },
   { id: "upload-events",label: "Upload Events",icon: Globe,         href: "/admin-dashboard/upload-events",     active: true  },
+  { id: "event-controls",label: "Event Controls",icon: SlidersHorizontal, href: "/admin-dashboard/event-controls", active: true,  roles: ["admin"] },
+  { id: "affiliates",   label: "Affiliates",   icon: Handshake,     href: "/admin-dashboard/affiliates",        active: true,  roles: ["admin"] },
   { id: "users",        label: "Users",        icon: Users,         href: "/admin-dashboard/users",             active: true,  roles: ["admin"] },
   { id: "verification", label: "Verification", icon: ShieldCheck,   href: "/admin-dashboard/verification",      active: true,  roles: ["admin", "customer-support", "exec-assistant"] },
   { id: "agent-verification", label: "Agent Verification", icon: UserCheck, href: "/admin-dashboard/agent-verification", active: true, roles: ["admin", "customer-support"] },
@@ -60,6 +62,7 @@ const menuItems = [
   { id: "requisition", label: "Requisition", icon: HandCoins,   href: "/admin-dashboard/requisition", active: true  },
   { id: "storage",    label: "Storage",    icon: ImageUp,       href: "/admin-dashboard/storage",    active: true  },
   { id: "legal",      label: "Legal Content", icon: Scale,      href: "/admin-dashboard/legal",      active: true,  roles: ["admin", "exec-assistant"] },
+  { id: "campaigns",  label: "Campaigns",  icon: Mail,          href: "/admin-dashboard/campaigns",  active: true,  roles: ["admin"] },
 ] as const
 
 const ROLE_DASHBOARD: Record<string, string> = {

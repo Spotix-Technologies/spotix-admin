@@ -5,7 +5,7 @@ import type React from "react"
 import { useState } from "react"
 import { useRouter, usePathname } from "next/navigation"
 import Image from "next/image"
-import { ClipboardList, LogOut, Loader2, SwitchCamera, FolderOpen, Receipt, Globe, Vote, ShieldCheck, CalendarDays, UserCheck, Wallet, Scale, ImageUp, HandCoins, Award } from "lucide-react"
+import { ClipboardList, LogOut, Loader2, SwitchCamera, FolderOpen, Receipt, Globe, Vote, ShieldCheck, CalendarDays, UserCheck, Wallet, Scale, ImageUp, HandCoins, Award, Mail } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   Sidebar, SidebarContent, SidebarFooter, SidebarHeader,
@@ -51,6 +51,7 @@ const ICON_MAP: Record<string, React.ElementType> = {
   ImageUp,
   HandCoins,
   Award,
+  Mail,
 }
 
 const ROLE_LABEL: Record<string, string> = {

@@ -3,6 +3,7 @@ import { adminDb } from "@/lib/firebase-admin"
 import { FieldValue } from "firebase-admin/firestore"
 import { verifyAdminAccess } from "@/lib/verify-admin"
 import { cacheDel, eventDocCacheKey } from "@/lib/redis-admin"
+import { supabaseAdmin } from "@/lib/supabase-admin"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -199,6 +200,7 @@ export async function GET(request: NextRequest) {
           organizerId: d.organizerId || "",
           affiliateId: d.affiliateId || null,
           affiliateName: d.affiliateName || null,
+          affiliateRate: d.affiliateRate ?? null,
           allowAgents: d.allowAgents ?? false,
           virtualQueueEnabled: d.virtualQueueEnabled ?? false,
           queueBatchSize: d.queueBatchSize ?? 50,
@@ -265,7 +267,7 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: "eventId and action are required", developer: DEV_TAG }, { status: 400 })
     }
 
-    if (["flag", "setStatus", "suspend", "updatePricing", "updateFeeBurden"].includes(action) && !isFullAdmin) {
+    if (["flag", "setStatus", "suspend", "updatePricing", "updateFeeBurden", "setAffiliate", "removeAffiliate"].includes(action) && !isFullAdmin) {
       return NextResponse.json({ error: "Forbidden: admin access required", developer: DEV_TAG }, { status: 403 })
     }
     const requiresReason = action !== "addDiscount" && action !== "editDiscount" && action !== "toggleDiscount" && action !== "deleteDiscount"
@@ -367,6 +369,70 @@ export async function PATCH(request: NextRequest) {
       }
       await eventRef.update({ suspended, updatedAt: new Date(), suspendAudit: FieldValue.arrayUnion({ ...auditEntry, suspended }) })
       return NextResponse.json({ success: true, message: `Event ${suspended ? "suspended" : "unsuspended"}`, developer: DEV_TAG }, { status: 200 })
+    }
+
+    /* ── Affiliate (full admins only — bookers can't change it after creation) ── */
+    if (action === "setAffiliate") {
+      const code = String(body.affiliateCode || "").trim()
+      if (!code) return NextResponse.json({ error: "affiliateCode is required", developer: DEV_TAG }, { status: 400 })
+
+      const [affPublic, affPrivate, settingsSnap] = await Promise.all([
+        adminDb.collection("Affiliates").doc(code).get(),
+        adminDb.collection("affiliateProfiles").doc(code).get(),
+        adminDb.collection("admin").doc("affiliateSettings").get(),
+      ])
+      if (!affPublic.exists || !affPublic.data()?.name) {
+        return NextResponse.json({ error: "No affiliate found with that code", developer: DEV_TAG }, { status: 404 })
+      }
+      const before = await eventDocData(eventRef)
+      if (before.affiliateId) {
+        return NextResponse.json({ error: "This event already has an affiliate. Remove them first.", developer: DEV_TAG }, { status: 409 })
+      }
+      if (affPrivate.data()?.uid && affPrivate.data()?.uid === before.organizerId) {
+        return NextResponse.json({ error: "The organizer can't be their own event's affiliate", developer: DEV_TAG }, { status: 400 })
+      }
+      const rate = Number(settingsSnap.data()?.ratePerTicket) || 0
+      const name = affPublic.data()!.name as string
+
+      await eventRef.firestore.runTransaction(async (tx) => {
+        tx.update(eventRef, { affiliateId: code, affiliateName: name, affiliateRate: rate, affiliateLockedAt: FieldValue.serverTimestamp(), updatedAt: new Date() })
+        tx.set(adminDb.collection("Affiliates").doc(code).collection("affiliatedEvents").doc(eventId), {
+          organizerId: before.organizerId ?? null, eventId, eventName: before.eventName ?? "", rate, addedByAdmin: admin.username, createdAt: FieldValue.serverTimestamp(),
+        })
+        tx.update(adminDb.collection("Affiliates").doc(code), { eventCount: FieldValue.increment(1) })
+        tx.create(eventRef.collection("editHistory").doc(), { action: "affiliate_added", actor: { uid: admin.uid, type: "Spotix", role: admin.role, username: admin.username }, reason, changes: { affiliateId: { before: null, after: code }, affiliateRate: { before: null, after: rate } }, createdAt: FieldValue.serverTimestamp() })
+      })
+      cacheDel(eventDocCacheKey(eventId)).catch(() => {})
+      return NextResponse.json({ success: true, message: "Affiliate added", data: { affiliateId: code, affiliateName: name, affiliateRate: rate }, developer: DEV_TAG }, { status: 200 })
+    }
+
+    if (action === "removeAffiliate") {
+      const before = await eventDocData(eventRef)
+      const code = before.affiliateId as string | null
+      if (!code) return NextResponse.json({ error: "This event has no affiliate", developer: DEV_TAG }, { status: 400 })
+
+      // Never pull the rug once money is moving or has moved for this event.
+      const { data: live, error: liveErr } = await supabaseAdmin
+        .from("affiliate_withdrawals")
+        .select("reference")
+        .eq("affiliate_code", code)
+        .eq("event_id", eventId)
+        .eq("kind", "event")
+        .in("status", ["processing", "successful"])
+        .limit(1)
+      if (liveErr) return NextResponse.json({ error: "Couldn't check this affiliate's withdrawals. Try again", developer: DEV_TAG }, { status: 500 })
+      if (live && live.length > 0) {
+        return NextResponse.json({ error: "This affiliate has already withdrawn (or is withdrawing) earnings for this event, so they can't be removed.", developer: DEV_TAG }, { status: 409 })
+      }
+
+      await eventRef.firestore.runTransaction(async (tx) => {
+        tx.update(eventRef, { affiliateId: null, affiliateName: null, affiliateRate: null, affiliateLockedAt: null, updatedAt: new Date() })
+        tx.delete(adminDb.collection("Affiliates").doc(code).collection("affiliatedEvents").doc(eventId))
+        tx.update(adminDb.collection("Affiliates").doc(code), { eventCount: FieldValue.increment(-1) })
+        tx.create(eventRef.collection("editHistory").doc(), { action: "affiliate_removed", actor: { uid: admin.uid, type: "Spotix", role: admin.role, username: admin.username }, reason, changes: { affiliateId: { before: code, after: null }, affiliateRate: { before: before.affiliateRate ?? null, after: null } }, createdAt: FieldValue.serverTimestamp() })
+      })
+      cacheDel(eventDocCacheKey(eventId)).catch(() => {})
+      return NextResponse.json({ success: true, message: "Affiliate removed", developer: DEV_TAG }, { status: 200 })
     }
 
     if (action === "toggleQueue") {

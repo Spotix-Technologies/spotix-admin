@@ -112,7 +112,7 @@ function EventDataClientInner() {
   const dropdownRef = useRef<HTMLDivElement>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  /* ── Load recent 10 events on mount ── */
+  /*  Load recent 10 events on mount  */
   const fetchRecentEvents = useCallback(async () => {
     setLoadingList(true)
     setListError(null)
@@ -132,7 +132,7 @@ function EventDataClientInner() {
     if (!sessionLoading) fetchRecentEvents()
   }, [sessionLoading, fetchRecentEvents])
 
-  /* ── Search suggestions (5+ chars) ── */
+  /*  Search suggestions (5+ chars)  */
   const fetchSuggestions = useCallback(async (term: string) => {
     if (term.length < 5) { setSuggestions([]); return }
     setLoadingSuggestions(true)
@@ -163,7 +163,7 @@ function EventDataClientInner() {
     return () => document.removeEventListener("mousedown", handler)
   }, [])
 
-  /* ── Select an event (from list or search) ── */
+  /*  Select an event (from list or search)  */
   const handleSelectEvent = async (item: EventSummary) => {
     setShowDropdown(false)
     setQuery("")
@@ -171,10 +171,10 @@ function EventDataClientInner() {
     await loadEventById(item.eventId)
   }
 
-  /* ── Load an event straight by id — used by handleSelectEvent above,
+  /*  Load an event straight by id — used by handleSelectEvent above,
      and by the ?eventId= deep link below (e.g. from the Users admin
      page's "Created Content" tab, or the Organizer ID link on this
-     event's own detail view). ── */
+     event's own detail view).  */
   const loadEventById = async (eventId: string) => {
     setDetailError(null)
     setLoadingEvent(true)
@@ -191,9 +191,9 @@ function EventDataClientInner() {
     }
   }
 
-  /* ── &eventId= deep link — e.g. /admin-dashboard/event-data?eventId=xyz.
+  /*  &eventId= deep link — e.g. /admin-dashboard/event-data?eventId=xyz.
      Jumps straight to that event's detail view on load, instead of
-     starting on the recent-events list. ── */
+     starting on the recent-events list.  */
   useEffect(() => {
     const eventId = searchParams.get("eventId")
     if (eventId) loadEventById(eventId)
@@ -209,7 +209,7 @@ function EventDataClientInner() {
     setQuery("")
   }
 
-  /* ── Access denied ── */
+  /*  Access denied  */
   const allowedRoles = ["admin", "customer-support", "exec-assistant"]
   const hasAccess = session && (allowedRoles.includes(session.role) || session.secondaryRoles.some((r) => allowedRoles.includes(r)))
   if (!sessionLoading && session && !hasAccess) {
@@ -226,7 +226,7 @@ function EventDataClientInner() {
     )
   }
 
-  /* ── Session loading ── */
+  /*  Session loading  */
   if (sessionLoading) {
     return (
       <div className="flex items-center justify-center py-24">
@@ -235,7 +235,7 @@ function EventDataClientInner() {
     )
   }
 
-  /* ── Event details view ── */
+  /*  Event details view  */
   if (viewState === "eventDetails") {
     if (loadingEvent) {
       return (
@@ -289,7 +289,7 @@ function EventDataClientInner() {
     )
   }
 
-  /* ── Deleted events view ── */
+  /*  Deleted events view  */
   if (viewState === "deletedEvents") {
     return (
       <div className="max-w-4xl mx-auto p-4 md:p-6">
@@ -305,7 +305,7 @@ function EventDataClientInner() {
     )
   }
 
-  /* ── Main list view ── */
+  /*  Main list view  */
   const showSearchResults = showDropdown && query.length >= 5
 
   return (

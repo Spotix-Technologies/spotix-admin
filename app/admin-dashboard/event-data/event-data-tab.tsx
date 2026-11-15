@@ -6,7 +6,7 @@ import {
   MapPin, Calendar, Clock, Ticket, Users, TrendingUp, Heart,
   Flag, EyeOff, Eye, ShieldBan, Trash2, AlertTriangle,
   X, CheckCircle, DollarSign, Link2, Tag, Info, Wallet,
-  Loader2, AlertCircle, Percent, Settings2, Package, Activity,
+  Loader2, AlertCircle, Percent, Settings2, Package, Activity, Handshake,
 } from "lucide-react"
 import AdminAttendeesTab from "./admin-attendees-tab"
 import PassesTab from "./passes-tab"
@@ -51,6 +51,7 @@ interface EventData {
   organizerId: string
   affiliateId: string | null
   affiliateName: string | null
+  affiliateRate?: number | null
   allowAgents: boolean
   virtualQueueEnabled: boolean
   queueBatchSize: number
@@ -231,6 +232,9 @@ export default function EventDataTab({ eventData, onUpdate, onDeleted, adminUser
   const [feeBurdenModal, setFeeBurdenModal] = useState(false)
   const [feeBurdenReason, setFeeBurdenReason] = useState("")
   const [paystackPayerChoice, setPaystackPayerChoice] = useState<"attendee" | "organizer" | "spotix">("attendee")
+  const [affiliateModal, setAffiliateModal] = useState<"add" | "remove" | null>(null)
+  const [affiliateCodeInput, setAffiliateCodeInput] = useState("")
+  const [affiliateReason, setAffiliateReason] = useState("")
   const [deleteModal, setDeleteModal] = useState(false)
   const [deleteConfirmText, setDeleteConfirmText] = useState("")
   const [deleteReason, setDeleteReason] = useState("")
@@ -254,6 +258,27 @@ export default function EventDataTab({ eventData, onUpdate, onDeleted, adminUser
     const json = await res.json()
     if (!res.ok) throw new Error(json.error || "Failed to update")
     return json
+  }
+
+  const handleAffiliateConfirm = async () => {
+    if (!affiliateReason.trim() || !affiliateModal) return
+    if (affiliateModal === "add" && !affiliateCodeInput.trim()) return
+    setSaving("affiliate")
+    try {
+      if (affiliateModal === "add") {
+        const json = await patchEvent("setAffiliate", { affiliateCode: affiliateCodeInput.trim() }, affiliateReason)
+        const updated = { ...event, ...json.data }
+        setEvent(updated); onUpdate(updated)
+        showToast("Affiliate added", "success")
+      } else {
+        await patchEvent("removeAffiliate", {}, affiliateReason)
+        const updated = { ...event, affiliateId: null, affiliateName: null, affiliateRate: null }
+        setEvent(updated); onUpdate(updated)
+        showToast("Affiliate removed", "success")
+      }
+      setAffiliateModal(null); setAffiliateReason(""); setAffiliateCodeInput("")
+    } catch (e) { showToast(e instanceof Error ? e.message : "Failed", "error") }
+    finally { setSaving(null) }
   }
 
   const handleFlagConfirm = async () => {
@@ -704,6 +729,38 @@ export default function EventDataTab({ eventData, onUpdate, onDeleted, adminUser
         </div>
       )}
 
+      {/* Affiliate */}
+      <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex items-start gap-3 min-w-0">
+          <div className="w-9 h-9 rounded-lg bg-[#6b2fa5]/10 flex items-center justify-center shrink-0">
+            <Handshake className="w-4 h-4 text-[#6b2fa5]" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-xs font-medium text-slate-500">Affiliate</p>
+            {event.affiliateId ? (
+              <>
+                <p className="text-sm font-semibold text-slate-800 truncate">{event.affiliateName || "Unnamed"}</p>
+                <p className="text-xs text-slate-500 font-mono break-all">Code: {event.affiliateId}{typeof event.affiliateRate === "number" ? ` · ₦${event.affiliateRate.toLocaleString("en-NG")}/ticket` : ""}</p>
+              </>
+            ) : (
+              <p className="text-sm text-slate-500">No affiliate on this event</p>
+            )}
+            <p className="text-[11px] text-slate-400 mt-1">Only admins can change this. Bookers can&apos;t edit it after creating the event.</p>
+          </div>
+        </div>
+        {canModerate && (
+          event.affiliateId ? (
+            <button onClick={() => setAffiliateModal("remove")} className="shrink-0 px-4 py-2 text-sm font-medium border border-red-200 text-red-600 hover:bg-red-50 rounded-lg transition-colors">
+              Remove affiliate
+            </button>
+          ) : (
+            <button onClick={() => setAffiliateModal("add")} className="shrink-0 px-4 py-2 text-sm font-medium bg-[#6b2fa5] hover:bg-[#5a2589] text-white rounded-lg transition-colors">
+              Add affiliate
+            </button>
+          )
+        )}
+      </div>
+
       {/* Details table */}
       <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
         <div className="px-5 py-4 border-b border-slate-100 flex items-center gap-2">
@@ -717,7 +774,6 @@ export default function EventDataTab({ eventData, onUpdate, onDeleted, adminUser
             ["Time", `${event.eventStart} – ${event.eventEnd}`],
             ["Venue", event.eventVenue],
             ["Type", event.eventType],
-            ["Affiliate", event.affiliateName || "None"],
             ["Collaboration", event.enabledCollaboration ? "Enabled" : "Disabled"],
             ["Agents Allowed", event.allowAgents ? "Yes" : "No"],
             ["Created At", event.createdAt ? new Date(event.createdAt).toLocaleDateString("en-NG") : "—"],
@@ -1057,6 +1113,29 @@ export default function EventDataTab({ eventData, onUpdate, onDeleted, adminUser
       )}
 
       {/* ── MODALS ── */}
+
+      <ActionModal
+        open={affiliateModal !== null}
+        onClose={() => { setAffiliateModal(null); setAffiliateReason(""); setAffiliateCodeInput("") }}
+        title={affiliateModal === "add" ? "Add affiliate" : "Remove affiliate"}
+        description={affiliateModal === "add" ? "Link an affiliate to this event. They earn the current flat per-ticket amount, locked in now." : `Remove ${event.affiliateName || "the affiliate"} from this event.`}
+        warning={affiliateModal === "remove" ? "Any earnings they haven't withdrawn for this event are removed with them. This is blocked if they've already withdrawn." : undefined}
+        danger={affiliateModal === "remove"}
+        confirmLabel={affiliateModal === "add" ? "Add affiliate" : "Remove affiliate"}
+        loading={saving === "affiliate"}
+        confirmDisabled={!affiliateReason.trim() || (affiliateModal === "add" && !affiliateCodeInput.trim())}
+        onConfirm={handleAffiliateConfirm}
+      >
+        {affiliateModal === "add" && (
+          <input
+            value={affiliateCodeInput}
+            onChange={(e) => setAffiliateCodeInput(e.target.value)}
+            placeholder="Affiliate code (e.g. SPX4K9Q2M)"
+            className="w-full text-sm bg-white border border-slate-200 rounded-lg px-3 py-2.5 font-mono text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#6b2fa5]/30 focus:border-[#6b2fa5]"
+          />
+        )}
+        <ReasonTextarea value={affiliateReason} onChange={setAffiliateReason} />
+      </ActionModal>
 
       <ActionModal
         open={flagModal}
