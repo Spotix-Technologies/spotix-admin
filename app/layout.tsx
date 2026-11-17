@@ -5,6 +5,7 @@ import { InstallPrompt } from "./components/pwa/install-prompt";
 import { RegisterServiceWorker } from "./components/pwa/register-sw";
 import { SplashProvider } from "./components/pwa/splash-context";
 import { SplashScreen } from "./components/pwa/splash-screen";
+import { ViewportLock } from "./components/viewport-lock";
 
 const geistSans = Geist({
 	variable: "--font-geist-sans",
@@ -42,6 +43,12 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
 	themeColor: "#6b2fa5",
+	width: "device-width",
+	initialScale: 1,
+	minimumScale: 1,
+	maximumScale: 1,
+	userScalable: false,
+	viewportFit: "cover",
 };
 
 export default function RootLayout({
@@ -54,6 +61,7 @@ export default function RootLayout({
 			<body
 				className={`${geistSans.variable} ${geistMono.variable} antialiased`}
 			>
+				<ViewportLock />
 				<SplashProvider>
 					<SplashScreen />
 					<RegisterServiceWorker />
