@@ -77,6 +77,14 @@ export function parseMonthString(monthString: string): { year: number; month: nu
   return { year, month }
 }
 
+export function getPreviousMonthName(monthString: string): string {
+  // Format: "YYYY-MM" -> name of the month before it (January wraps to December)
+  const parsed = parseMonthString(monthString)
+  if (!parsed) return "Previous Month"
+  const prev = parsed.month === 1 ? 12 : parsed.month - 1
+  return getMonthName(prev)
+}
+
 export function parseDayString(dayString: string): { year: number; month: number; day: number } | null {
   // Format: "YYYY-MM-DD"
   const parts = dayString.split("-")
@@ -105,6 +113,7 @@ export function useMonth() {
     getCurrentYear,
     formatMonthYear,
     parseMonthString,
+    getPreviousMonthName,
     parseDayString,
     getAllMonths,
     MONTH_NAMES,

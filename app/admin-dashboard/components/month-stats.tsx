@@ -7,7 +7,7 @@ import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from "recharts"
 import { Ticket, Users, Banknote } from "lucide-react"
 import type { StatsData } from "./home-stats"
-import { getMonthName, parseMonthString } from "@/hooks/use-month"
+import { getMonthName, getPreviousMonthName, parseMonthString } from "@/hooks/use-month"
 import { formatCurrency, formatNumber } from "@/lib/stat-format"
 import { StatCard, StatGrid } from "./stat-card"
 
