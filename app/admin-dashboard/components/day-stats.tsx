@@ -5,9 +5,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from "recharts"
-import { Ticket, Users, Banknote, TrendingUp, TrendingDown, Minus, Calendar } from "lucide-react"
+import { Ticket, Users, Banknote, Calendar } from "lucide-react"
 import type { StatsData } from "./home-stats"
 import { getMonthName, parseDayString } from "@/hooks/use-month"
+import { formatCurrency, formatNumber } from "@/lib/stat-format"
+import { PercentageIndicator, StatCard, StatGrid } from "./stat-card"
 
 interface DayStatsProps {
   stats: StatsData
@@ -15,19 +17,6 @@ interface DayStatsProps {
 
 type ViewMode = "revenue" | "tickets" | "signups" | "transactionFees" | "payout" | "payoutCount"
 type CompareMode = "1" | "3" | "7"
-
-function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat("en-NG", {
-    style: "currency",
-    currency: "NGN",
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(amount)
-}
-
-function formatNumber(num: number): string {
-  return new Intl.NumberFormat("en-NG").format(num)
-}
 
 /**
  * Get Nigerian time (WAT = UTC+1)
@@ -73,41 +62,6 @@ function formatDayLabel(dayString: string, index: number): string {
   const parsed = parseDayString(dayString)
   if (!parsed) return dayString
   return `${parsed.month}/${parsed.day}`
-}
-
-function calculatePercentageChange(
-  current: number,
-  previous: number,
-): { value: number; trend: "up" | "down" | "neutral" } {
-  if (previous === 0) {
-    return { value: current > 0 ? 100 : 0, trend: current > 0 ? "up" : "neutral" }
-  }
-  const change = ((current - previous) / previous) * 100
-  return {
-    value: Math.abs(change),
-    trend: change > 0 ? "up" : change < 0 ? "down" : "neutral",
-  }
-}
-
-function PercentageIndicator({ current, previous }: { current: number; previous: number }) {
-  const { value, trend } = calculatePercentageChange(current, previous)
-
-  if (trend === "neutral") {
-    return (
-      <div className="flex items-center gap-1 text-gray-500">
-        <Minus className="w-3 h-3" />
-        <span className="text-xs">0%</span>
-      </div>
-    )
-  }
-
-  const isUp = trend === "up"
-  return (
-    <div className={`flex items-center gap-1 ${isUp ? "text-green-600" : "text-red-600"}`}>
-      {isUp ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
-      <span className="text-xs font-medium">{value.toFixed(1)}%</span>
-    </div>
-  )
 }
 
 export function DayStats({ stats }: DayStatsProps) {
@@ -351,91 +305,17 @@ export function DayStats({ stats }: DayStatsProps) {
             )}
           </div>
           <p className="text-xs md:text-sm font-medium mb-1 md:mb-2">{highlight.label}</p>
-          <p className="text-2xl md:text-4xl font-bold truncate">{highlight.value}</p>
+          <p className="text-2xl md:text-4xl font-bold break-words">{highlight.value}</p>
         </div>
 
-        <div className="grid grid-cols-2 gap-2 md:gap-4 lg:grid-cols-6">
-          <div className="p-2 md:p-4 rounded-lg bg-purple-50 border border-purple-100">
-            <div className="flex items-center justify-between mb-1 md:mb-2 flex-wrap gap-1">
-              <div className="flex items-center gap-1 md:gap-2">
-                <Banknote className="w-3 h-3 md:w-4 md:h-4 text-purple-600" />
-                <span className="text-[10px] md:text-xs font-medium text-purple-600">Revenue</span>
-              </div>
-              <PercentageIndicator current={totalRevenue} previous={yesterdayData.totalRevenue || 0} />
-            </div>
-            <p className="text-sm md:text-lg font-bold text-purple-900 truncate">
-              {formatCurrency(totalRevenue)}
-            </p>
-            <p className="text-[10px] md:text-xs text-purple-600/70 mt-0.5 md:mt-1 truncate">
-              vs {formatCurrency(yesterdayData.totalRevenue || 0)}
-            </p>
-          </div>
-          <div className="p-2 md:p-4 rounded-lg bg-green-50 border border-green-100">
-            <div className="flex items-center justify-between mb-1 md:mb-2 flex-wrap gap-1">
-              <div className="flex items-center gap-1 md:gap-2">
-                <Ticket className="w-3 h-3 md:w-4 md:h-4 text-green-600" />
-                <span className="text-[10px] md:text-xs font-medium text-green-600">Tickets</span>
-              </div>
-              <PercentageIndicator current={ticketsSold} previous={yesterdayData.ticketsSold || 0} />
-            </div>
-            <p className="text-sm md:text-lg font-bold text-green-900">{formatNumber(ticketsSold)}</p>
-            <p className="text-[10px] md:text-xs text-green-600/70 mt-0.5 md:mt-1">
-              vs {formatNumber(yesterdayData.ticketsSold || 0)}
-            </p>
-          </div>
-          <div className="p-2 md:p-4 rounded-lg bg-blue-50 border border-blue-100">
-            <div className="flex items-center justify-between mb-1 md:mb-2 flex-wrap gap-1">
-              <div className="flex items-center gap-1 md:gap-2">
-                <Users className="w-3 h-3 md:w-4 md:h-4 text-blue-600" />
-                <span className="text-[10px] md:text-xs font-medium text-blue-600">Sign-ups</span>
-              </div>
-              <PercentageIndicator current={usersSignedUp} previous={yesterdayData.usersSignedUp || 0} />
-            </div>
-            <p className="text-sm md:text-lg font-bold text-blue-900">{formatNumber(usersSignedUp)}</p>
-            <p className="text-[10px] md:text-xs text-blue-600/70 mt-0.5 md:mt-1">
-              vs {formatNumber(yesterdayData.usersSignedUp || 0)}
-            </p>
-          </div>
-          <div className="p-2 md:p-4 rounded-lg bg-amber-50 border border-amber-100">
-            <div className="flex items-center justify-between mb-1 md:mb-2 flex-wrap gap-1">
-              <div className="flex items-center gap-1 md:gap-2">
-                <Banknote className="w-3 h-3 md:w-4 md:h-4 text-amber-600" />
-                <span className="text-[10px] md:text-xs font-medium text-amber-600">Fees</span>
-              </div>
-              <PercentageIndicator current={totalTransactionFees} previous={yesterdayData.totalTransactionFees || 0} />
-            </div>
-            <p className="text-sm md:text-lg font-bold text-amber-900 truncate">{formatCurrency(totalTransactionFees)}</p>
-            <p className="text-[10px] md:text-xs text-amber-600/70 mt-0.5 md:mt-1 truncate">
-              vs {formatCurrency(yesterdayData.totalTransactionFees || 0)}
-            </p>
-          </div>
-          <div className="p-2 md:p-4 rounded-lg bg-orange-50 border border-orange-100">
-            <div className="flex items-center justify-between mb-1 md:mb-2 flex-wrap gap-1">
-              <div className="flex items-center gap-1 md:gap-2">
-                <Banknote className="w-3 h-3 md:w-4 md:h-4 text-orange-600" />
-                <span className="text-[10px] md:text-xs font-medium text-orange-600">Payout</span>
-              </div>
-              <PercentageIndicator current={payout} previous={yesterdayData.payout || 0} />
-            </div>
-            <p className="text-sm md:text-lg font-bold text-orange-900 truncate">{formatCurrency(payout)}</p>
-            <p className="text-[10px] md:text-xs text-orange-600/70 mt-0.5 md:mt-1 truncate">
-              vs {formatCurrency(yesterdayData.payout || 0)}
-            </p>
-          </div>
-          <div className="p-2 md:p-4 rounded-lg bg-cyan-50 border border-cyan-100">
-            <div className="flex items-center justify-between mb-1 md:mb-2 flex-wrap gap-1">
-              <div className="flex items-center gap-1 md:gap-2">
-                <Ticket className="w-3 h-3 md:w-4 md:h-4 text-cyan-600" />
-                <span className="text-[10px] md:text-xs font-medium text-cyan-600">Payout Count</span>
-              </div>
-              <PercentageIndicator current={payoutCount} previous={yesterdayData.payoutCount || 0} />
-            </div>
-            <p className="text-sm md:text-lg font-bold text-cyan-900">{formatNumber(payoutCount)}</p>
-            <p className="text-[10px] md:text-xs text-cyan-600/70 mt-0.5 md:mt-1">
-              vs {formatNumber(yesterdayData.payoutCount || 0)}
-            </p>
-          </div>
-        </div>
+        <StatGrid>
+          <StatCard label="Revenue" icon={Banknote} tone="purple" current={totalRevenue} previous={yesterdayData.totalRevenue || 0} kind="currency" size="lg" />
+          <StatCard label="Tickets" icon={Ticket} tone="green" current={ticketsSold} previous={yesterdayData.ticketsSold || 0} kind="number" size="lg" />
+          <StatCard label="Sign-ups" icon={Users} tone="blue" current={usersSignedUp} previous={yesterdayData.usersSignedUp || 0} kind="number" size="lg" />
+          <StatCard label="Fees" icon={Banknote} tone="amber" current={totalTransactionFees} previous={yesterdayData.totalTransactionFees || 0} kind="currency" size="lg" />
+          <StatCard label="Payout" icon={Banknote} tone="orange" current={payout} previous={yesterdayData.payout || 0} kind="currency" size="lg" />
+          <StatCard label="Payout Count" icon={Ticket} tone="cyan" current={payoutCount} previous={yesterdayData.payoutCount || 0} kind="number" size="lg" />
+        </StatGrid>
 
         <div className="mt-4 md:mt-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 md:gap-4 mb-3 md:mb-4">

@@ -4,6 +4,7 @@ import { FieldValue } from "firebase-admin/firestore"
 import { verifyAdminAccess } from "@/lib/verify-admin"
 import { cacheDel, eventDocCacheKey } from "@/lib/redis-admin"
 import { supabaseAdmin } from "@/lib/supabase-admin"
+import { callCampaignBackend } from "@/lib/campaign-backend"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -150,6 +151,58 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: true, data: results.slice(0, 8), developer: DEV_TAG }, { status: 200 })
     }
 
+    /* EDIT HISTORY
+       Booker/teammate edits live in Supabase (served by spotix-backend); edits made
+       from this admin panel are still written to Firestore events/{id}/editHistory.
+       The first page merges both so admins see one timeline; later pages are
+       Supabase-only (older legacy admin entries all arrive with page 1). */
+    if (action === "getEditHistory") {
+      const eventId = searchParams.get("eventId")
+      if (!eventId) {
+        return NextResponse.json({ error: "eventId required", developer: DEV_TAG }, { status: 400 })
+      }
+      const before = searchParams.get("before")
+      const limit = Math.min(Math.max(Number(searchParams.get("limit")) || 25, 1), 100)
+
+      const qs = new URLSearchParams({ eventId, limit: String(limit) })
+      if (before) qs.set("before", before)
+
+      const [remote, legacySnap] = await Promise.all([
+        callCampaignBackend(`/edit-history?${qs}`).catch(() => null),
+        before
+          ? Promise.resolve(null)
+          : adminDb.collection("events").doc(eventId).collection("editHistory").orderBy("createdAt", "desc").limit(50).get(),
+      ])
+
+      const supabaseOk = Boolean(remote?.res.ok)
+      const supabaseEntries = supabaseOk ? ((remote!.data.entries ?? []) as Array<Record<string, any>>) : []
+      const legacyEntries = (legacySnap?.docs ?? []).map((doc) => {
+        const data = doc.data()
+        return {
+          id: doc.id,
+          action: data.action,
+          actor: { uid: data.actor?.uid, type: data.actor?.type ?? "Spotix", role: data.actor?.role, name: data.actor?.username ?? null },
+          changes: data.changes ?? {},
+          reason: data.reason ?? undefined,
+          source: "admin",
+          createdAt: data.createdAt?.toDate?.()?.toISOString() || null,
+        }
+      })
+
+      const entries = [...supabaseEntries, ...legacyEntries].sort(
+        (a, b) => new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime(),
+      )
+
+      return NextResponse.json({
+        success: true,
+        entries,
+        nextCursor: supabaseOk ? (remote!.data.nextCursor ?? null) : null,
+        // Lets the UI say "organizer edits unavailable" instead of silently showing a partial timeline.
+        partial: !supabaseOk,
+        developer: DEV_TAG,
+      }, { status: 200 })
+    }
+
     /* EVENT DETAILS */
     if (action === "getEventDetails") {
       const eventId = searchParams.get("eventId")
@@ -164,10 +217,11 @@ export async function GET(request: NextRequest) {
 
       const d = eventDoc.data()!
       const eventRef = adminDb.collection("events").doc(eventId)
-      const [attendeesCountSnap, discountsSnap, historySnap] = await Promise.all([
+      // editHistory is no longer bundled here — the History tab loads it lazily via
+      // ?action=getEditHistory, so opening an event costs one fewer Firestore query.
+      const [attendeesCountSnap, discountsSnap] = await Promise.all([
         eventRef.collection("attendees").count().get(),
         eventRef.collection("discounts").get(),
-        eventRef.collection("editHistory").orderBy("createdAt", "desc").limit(50).get(),
       ])
       const attendeeCount = attendeesCountSnap.data().count
 
@@ -224,7 +278,6 @@ export async function GET(request: NextRequest) {
           updatedAt: d.updatedAt?.toDate?.()?.toISOString() || null,
           attendeeCount,
           discounts: discountsSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() })),
-          editHistory: historySnap.docs.map((doc) => ({ id: doc.id, ...doc.data(), createdAt: doc.data().createdAt?.toDate?.()?.toISOString() || null })),
         },
         developer: DEV_TAG,
       }, { status: 200 })

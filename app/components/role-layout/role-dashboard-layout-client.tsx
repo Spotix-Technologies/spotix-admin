@@ -267,7 +267,7 @@ export function RoleDashboardLayoutClient({
       />
 
       <SidebarInset>
-        <header className="bg-white border-b border-gray-200 px-3 md:px-4 py-2 md:py-3 flex items-center gap-2 md:gap-4 flex-shrink-0">
+        <header className="header-safe-top bg-white border-b border-gray-200 px-3 md:px-4 py-2 md:py-3 flex items-center gap-2 md:gap-4 flex-shrink-0">
           {/* Mobile hamburger */}
           <SidebarTrigger className="-ml-1" />
           {/* Desktop collapse toggle */}

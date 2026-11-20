@@ -156,7 +156,7 @@ function SidebarInner({ user }: { user: User }) {
   return (
     <>
       {navToast && (
-        <div className="fixed top-4 right-4 z-[9999] flex items-center gap-3 px-5 py-3.5 rounded-xl shadow-lg border border-gray-200 bg-white text-sm font-medium text-gray-700">
+        <div className="fixed top-[calc(env(safe-area-inset-top,0px)+1rem)] right-4 z-[9999] flex items-center gap-3 px-5 py-3.5 rounded-xl shadow-lg border border-gray-200 bg-white text-sm font-medium text-gray-700">
           <Loader2 className="w-4 h-4 animate-spin text-[#6b2fa5]" />
           Loading...
         </div>
@@ -308,7 +308,7 @@ export function DashboardLayoutClient({ user, children }: DashboardLayoutClientP
       <SidebarInner user={user} />
 
       <SidebarInset>
-        <header className="bg-white border-b border-gray-200 px-3 md:px-4 py-2 md:py-3 flex items-center gap-2 md:gap-4 flex-shrink-0">
+        <header className="header-safe-top bg-white border-b border-gray-200 px-3 md:px-4 py-2 md:py-3 flex items-center gap-2 md:gap-4 flex-shrink-0">
           {/* Mobile hamburger */}
           <SidebarTrigger className="-ml-1" />
           {/* Desktop collapse toggle */}

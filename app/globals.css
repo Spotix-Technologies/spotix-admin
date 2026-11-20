@@ -179,3 +179,26 @@ body {
     touch-action: manipulation;
   }
 }
+
+/* ── PWA safe areas ─────────────────────────────────────────────────────
+   The app sets viewportFit: "cover" + a black-translucent iOS status bar, so
+   page content draws underneath the clock / notch. These keep sticky headers
+   and the mobile drawer clear of it (env() is 0 on desktop browsers).      */
+.header-safe-top {
+  padding-top: calc(env(safe-area-inset-top, 0px) + 0.5rem);
+}
+@media (min-width: 768px) {
+  .header-safe-top {
+    padding-top: calc(env(safe-area-inset-top, 0px) + 0.75rem);
+  }
+}
+.sidebar-safe {
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+@media (min-width: 1024px) {
+  .sidebar-safe {
+    padding-top: 0;
+    padding-bottom: 0;
+  }
+}

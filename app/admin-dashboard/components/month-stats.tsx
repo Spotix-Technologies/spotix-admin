@@ -5,73 +5,17 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from "recharts"
-import { Ticket, Users, Banknote, TrendingUp, TrendingDown, Minus } from "lucide-react"
+import { Ticket, Users, Banknote } from "lucide-react"
 import type { StatsData } from "./home-stats"
 import { getMonthName, parseMonthString } from "@/hooks/use-month"
+import { formatCurrency, formatNumber } from "@/lib/stat-format"
+import { StatCard, StatGrid } from "./stat-card"
 
 interface MonthStatsProps {
   stats: StatsData
 }
 
 type ViewMode = "revenue" | "tickets" | "signups" | "transactionFees" | "payout" | "payoutCount"
-
-function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat("en-NG", {
-    style: "currency",
-    currency: "NGN",
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(amount)
-}
-
-function formatNumber(num: number): string {
-  return new Intl.NumberFormat("en-NG").format(num)
-}
-
-function calculatePercentageChange(
-  current: number,
-  previous: number,
-): { value: number; trend: "up" | "down" | "neutral" } {
-  if (previous === 0) {
-    return { value: current > 0 ? 100 : 0, trend: current > 0 ? "up" : "neutral" }
-  }
-  const change = ((current - previous) / previous) * 100
-  return {
-    value: Math.abs(change),
-    trend: change > 0 ? "up" : change < 0 ? "down" : "neutral",
-  }
-}
-
-function PercentageIndicator({ current, previous }: { current: number; previous: number }) {
-  const { value, trend } = calculatePercentageChange(current, previous)
-
-  if (trend === "neutral") {
-    return (
-      <div className="flex items-center gap-1 text-gray-500">
-        <Minus className="w-3 h-3" />
-        <span className="text-xs">0%</span>
-      </div>
-    )
-  }
-
-  const isUp = trend === "up"
-  return (
-    <div className={`flex items-center gap-1 ${isUp ? "text-green-600" : "text-red-600"}`}>
-      {isUp ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
-      <span className="text-xs font-medium">{value.toFixed(1)}%</span>
-    </div>
-  )
-}
-
-function getPreviousMonthName(currentMonth: string): string {
-  const parsed = parseMonthString(currentMonth)
-  if (!parsed) return "Previous Month"
-
-  if (parsed.month === 1) {
-    return `December ${parsed.year - 1}`
-  }
-  return getMonthName(parsed.month - 1)
-}
 
 export function MonthStats({ stats }: MonthStatsProps) {
   const [viewMode, setViewMode] = useState<ViewMode>("revenue")
@@ -172,88 +116,14 @@ export function MonthStats({ stats }: MonthStatsProps) {
         </div>
       </CardHeader>
       <CardContent className="p-4 md:p-6 pt-0 md:pt-0">
-        <div className="grid grid-cols-2 gap-2 md:gap-4 mb-4 md:mb-6 lg:grid-cols-6">
-          <div className="p-2 md:p-4 rounded-lg bg-purple-50 border border-purple-100">
-            <div className="flex items-center justify-between mb-1 md:mb-2 flex-wrap gap-1">
-              <div className="flex items-center gap-1 md:gap-2">
-                <Banknote className="w-3 h-3 md:w-4 md:h-4 text-purple-600" />
-                <span className="text-[10px] md:text-xs font-medium text-purple-600">Monthly Revenue</span>
-              </div>
-              <PercentageIndicator current={totalRevenue} previous={prevMonth.totalRevenue} />
-            </div>
-            <p className="text-sm md:text-xl font-bold text-purple-900 truncate">
-              {formatCurrency(totalRevenue)}
-            </p>
-            <p className="text-[10px] md:text-xs text-purple-600/70 mt-0.5 md:mt-1 truncate">
-              vs {formatCurrency(prevMonth.totalRevenue)}
-            </p>
-          </div>
-          <div className="p-2 md:p-4 rounded-lg bg-green-50 border border-green-100">
-            <div className="flex items-center justify-between mb-1 md:mb-2 flex-wrap gap-1">
-              <div className="flex items-center gap-1 md:gap-2">
-                <Ticket className="w-3 h-3 md:w-4 md:h-4 text-green-600" />
-                <span className="text-[10px] md:text-xs font-medium text-green-600">Tickets Sold</span>
-              </div>
-              <PercentageIndicator current={ticketsSold} previous={prevMonth.ticketsSold} />
-            </div>
-            <p className="text-sm md:text-xl font-bold text-green-900">{formatNumber(ticketsSold)}</p>
-            <p className="text-[10px] md:text-xs text-green-600/70 mt-0.5 md:mt-1">
-              vs {formatNumber(prevMonth.ticketsSold)}
-            </p>
-          </div>
-          <div className="p-2 md:p-4 rounded-lg bg-blue-50 border border-blue-100">
-            <div className="flex items-center justify-between mb-1 md:mb-2 flex-wrap gap-1">
-              <div className="flex items-center gap-1 md:gap-2">
-                <Users className="w-3 h-3 md:w-4 md:h-4 text-blue-600" />
-                <span className="text-[10px] md:text-xs font-medium text-blue-600">Users Signed Up</span>
-              </div>
-              <PercentageIndicator current={usersSignedUp} previous={prevMonth.usersSignedUp} />
-            </div>
-            <p className="text-sm md:text-xl font-bold text-blue-900">{formatNumber(usersSignedUp)}</p>
-            <p className="text-[10px] md:text-xs text-blue-600/70 mt-0.5 md:mt-1">
-              vs {formatNumber(prevMonth.usersSignedUp)}
-            </p>
-          </div>
-          <div className="p-2 md:p-4 rounded-lg bg-amber-50 border border-amber-100">
-            <div className="flex items-center justify-between mb-1 md:mb-2 flex-wrap gap-1">
-              <div className="flex items-center gap-1 md:gap-2">
-                <Banknote className="w-3 h-3 md:w-4 md:h-4 text-amber-600" />
-                <span className="text-[10px] md:text-xs font-medium text-amber-600">Monthly Fees</span>
-              </div>
-              <PercentageIndicator current={totalTransactionFees} previous={prevMonth.totalTransactionFees} />
-            </div>
-            <p className="text-sm md:text-xl font-bold text-amber-900 truncate">{formatCurrency(totalTransactionFees)}</p>
-            <p className="text-[10px] md:text-xs text-amber-600/70 mt-0.5 md:mt-1 truncate">
-              vs {formatCurrency(prevMonth.totalTransactionFees)}
-            </p>
-          </div>
-          <div className="p-2 md:p-4 rounded-lg bg-orange-50 border border-orange-100">
-            <div className="flex items-center justify-between mb-1 md:mb-2 flex-wrap gap-1">
-              <div className="flex items-center gap-1 md:gap-2">
-                <Banknote className="w-3 h-3 md:w-4 md:h-4 text-orange-600" />
-                <span className="text-[10px] md:text-xs font-medium text-orange-600">Monthly Payout</span>
-              </div>
-              <PercentageIndicator current={payout} previous={prevMonth.payout} />
-            </div>
-            <p className="text-sm md:text-xl font-bold text-orange-900 truncate">{formatCurrency(payout)}</p>
-            <p className="text-[10px] md:text-xs text-orange-600/70 mt-0.5 md:mt-1 truncate">
-              vs {formatCurrency(prevMonth.payout)}
-            </p>
-          </div>
-          <div className="p-2 md:p-4 rounded-lg bg-cyan-50 border border-cyan-100">
-            <div className="flex items-center justify-between mb-1 md:mb-2 flex-wrap gap-1">
-              <div className="flex items-center gap-1 md:gap-2">
-                <Ticket className="w-3 h-3 md:w-4 md:h-4 text-cyan-600" />
-                <span className="text-[10px] md:text-xs font-medium text-cyan-600">Payout Count</span>
-              </div>
-              <PercentageIndicator current={payoutCount} previous={prevMonth.payoutCount} />
-            </div>
-            <p className="text-sm md:text-xl font-bold text-cyan-900">{formatNumber(payoutCount)}</p>
-            <p className="text-[10px] md:text-xs text-cyan-600/70 mt-0.5 md:mt-1">
-              vs {formatNumber(prevMonth.payoutCount)}
-            </p>
-          </div>
-        </div>
+        <StatGrid className="mb-4 md:mb-6">
+          <StatCard label="Monthly Revenue" icon={Banknote} tone="purple" current={totalRevenue} previous={prevMonth.totalRevenue} kind="currency" />
+          <StatCard label="Tickets Sold" icon={Ticket} tone="green" current={ticketsSold} previous={prevMonth.ticketsSold} kind="number" />
+          <StatCard label="Users Signed Up" icon={Users} tone="blue" current={usersSignedUp} previous={prevMonth.usersSignedUp} kind="number" />
+          <StatCard label="Monthly Fees" icon={Banknote} tone="amber" current={totalTransactionFees} previous={prevMonth.totalTransactionFees} kind="currency" />
+          <StatCard label="Monthly Payout" icon={Banknote} tone="orange" current={payout} previous={prevMonth.payout} kind="currency" />
+          <StatCard label="Payout Count" icon={Ticket} tone="cyan" current={payoutCount} previous={prevMonth.payoutCount} kind="number" />
+        </StatGrid>
 
         <ChartContainer config={chartConfig} className="h-[180px] md:h-[220px] lg:h-[250px] w-full">
           <ResponsiveContainer width="100%" height="100%">

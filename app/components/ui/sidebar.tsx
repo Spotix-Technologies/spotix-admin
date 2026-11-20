@@ -61,7 +61,7 @@ export const Sidebar = React.forwardRef<HTMLDivElement, SidebarProps>(
         className={[
           "bg-white transition-all duration-300 ease-in-out",
           // Mobile: slide in/out
-          "fixed left-0 top-0 h-[100dvh] z-40",
+          "fixed left-0 top-0 h-[100dvh] z-40 sidebar-safe",
           open ? "w-64" : "w-0 overflow-hidden",
           // Desktop: always visible, full or icon-only
           "lg:relative lg:flex-shrink-0",

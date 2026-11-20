@@ -6,13 +6,14 @@ import {
   MapPin, Calendar, Clock, Ticket, Users, TrendingUp, Heart,
   Flag, EyeOff, Eye, ShieldBan, Trash2, AlertTriangle,
   X, CheckCircle, DollarSign, Link2, Tag, Info, Wallet,
-  Loader2, AlertCircle, Percent, Settings2, Package, Activity, Handshake,
+  Loader2, AlertCircle, Percent, Settings2, Package, Activity, Handshake, History,
 } from "lucide-react"
 import AdminAttendeesTab from "./admin-attendees-tab"
 import PassesTab from "./passes-tab"
 import ReferralsTab from "./referrals-tab"
 import AddonsTab from "./addons-tab"
 import AdminEditPanel from "./admin-edit-panel"
+import EditHistoryPanel from "./edit-history/edit-history-panel"
 import AdminEventPayoutsPanel from "@/components/payout/admin-event-payouts-panel"
 import type { DiscountData, EventLike } from "./admin-edit/types"
 
@@ -206,7 +207,7 @@ export default function EventDataTab({ eventData, onUpdate, onDeleted, adminUser
   const [activeImage, setActiveImage] = useState(event.eventImage)
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null)
   const [saving, setSaving] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<"overview" | "attendees" | "payouts" | "passes" | "referrals" | "addons" | "editEvent">("overview")
+  const [activeTab, setActiveTab] = useState<"overview" | "attendees" | "payouts" | "passes" | "referrals" | "addons" | "history" | "editEvent">("overview")
 
   const [flagModal, setFlagModal] = useState(false)
   const [flagReason, setFlagReason] = useState("")
@@ -556,6 +557,17 @@ export default function EventDataTab({ eventData, onUpdate, onDeleted, adminUser
           <Package className="w-3.5 h-3.5" />
           Addons
         </button>
+        <button
+          onClick={() => setActiveTab("history")}
+          className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all flex items-center gap-1.5 ${
+            activeTab === "history"
+              ? "bg-white text-[#6b2fa5] shadow-sm"
+              : "text-slate-500 hover:text-slate-700"
+          }`}
+        >
+          <History className="w-3.5 h-3.5" />
+          History
+        </button>
         {canEditEvent && (
           <button
             onClick={() => setActiveTab("editEvent")}
@@ -575,6 +587,9 @@ export default function EventDataTab({ eventData, onUpdate, onDeleted, adminUser
       {activeTab === "editEvent" && canEditEvent && (
         <AdminEditPanel event={event} discounts={discounts} onUpdate={handleEditPanelUpdate} />
       )}
+
+      {/* History tab */}
+      {activeTab === "history" && <EditHistoryPanel eventId={event.id} />}
 
       {/* Referrals tab */}
       {activeTab === "referrals" && (
